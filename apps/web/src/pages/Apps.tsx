@@ -1,6 +1,13 @@
 // ** import lib
 import { useState } from "react";
-import { ArrowUp, Grid2X2, Paperclip, Plus } from "lucide-react";
+import {
+  ArrowUp,
+  CircleUser,
+  Grid2X2,
+  Paperclip,
+  Plus,
+  Settings,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
 // ** import components
@@ -36,11 +43,21 @@ export default function Apps() {
         <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 pb-8 pt-5 sm:px-6">
           <header className="mb-6 flex items-center justify-end gap-2">
             <ModeToggle />
-            <Link to="/account/settings">
-              <Button variant="outline" size="sm" className="h-8">
-                Settings
-              </Button>
-            </Link>
+            <Button variant="ghost" size="icon-xs" asChild>
+              <Link
+                to="/account/ai-model-settings"
+                aria-label="AI model settings"
+              >
+                <Settings className="h-3.5 w-3.5" />
+                <span className="sr-only">AI model settings</span>
+              </Link>
+            </Button>
+            <Button variant="ghost" size="icon-xs" asChild>
+              <Link to="/account/settings" aria-label="Account settings">
+                <CircleUser className="h-3.5 w-3.5" />
+                <span className="sr-only">Account settings</span>
+              </Link>
+            </Button>
           </header>
 
           <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col pt-4 sm:pt-8">
