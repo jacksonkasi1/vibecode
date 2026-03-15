@@ -29,6 +29,8 @@ export const env = createEnv({
     R2_ENDPOINT_URL: z.string().url(),
     R2_BUCKET_NAME: z.string().min(1),
     R2_PUBLIC_URL: z.string().url().optional(),
+
+    GEMINI_API_KEY: z.string().min(1).optional(),
   },
 
   runtimeEnv: process.env,
