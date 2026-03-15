@@ -1,25 +1,31 @@
-// ** import lib
-import { useState } from "react";
-import { Settings2 } from "lucide-react";
+// ** import core packages
+import { useMemo, useState } from "react";
+import { ChevronDown, Settings } from "lucide-react";
 
 // ** import components
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 
-type Provider = "vibe" | "anthropic" | "openai" | "google";
+type Provider = "anthropic" | "openai" | "google";
 
 type ModelItem = {
   id: string;
   name: string;
   provider: Provider;
-  alwaysOn?: boolean;
+};
+
+type CustomModel = {
+  id: string;
 };
 
 const models: ModelItem[] = [
-  { id: "auto", name: "Auto", provider: "vibe", alwaysOn: true },
   { id: "claude-sonnet", name: "Claude Sonnet 4.6", provider: "anthropic" },
   { id: "gpt-5-3", name: "GPT-5.3 Codex", provider: "openai" },
   {
@@ -34,27 +40,56 @@ const models: ModelItem[] = [
   },
 ];
 
-const apiKeys = [
-  "OpenAI API Key",
-  "Anthropic API Key",
-  "Google AI Studio Key",
-] as const;
+const providers: Array<{ id: Provider; label: string }> = [
+  { id: "anthropic", label: "Anthropic" },
+  { id: "openai", label: "OpenAI" },
+  { id: "google", label: "Google" },
+];
 
-const providerDotStyles: Record<Provider, string> = {
-  vibe: "bg-amber-500",
+const providerDotStyles: Record<Provider | "custom", string> = {
   anthropic: "bg-orange-500",
   openai: "bg-emerald-500",
   google: "bg-blue-500",
+  custom: "bg-slate-400",
 };
 
 export default function AIModelSettings() {
+  const [customModels, setCustomModels] = useState<CustomModel[]>([
+    { id: "custom-1" },
+  ]);
   const [enabledModels, setEnabledModels] = useState<Record<string, boolean>>({
     "claude-sonnet": true,
-    "gpt-5-3": false,
+    "gpt-5-3": true,
     "gemini-3-1-pro-preview": true,
     "gemini-3-flash-preview": false,
+    "custom-1": false,
   });
-
+  const [defaultModel, setDefaultModel] = useState<string>("claude-sonnet");
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [developerSettingsOpen, setDeveloperSettingsOpen] = useState<
+    Record<string, boolean>
+  >({});
+  const [connectionSettings, setConnectionSettings] = useState<
+    Record<string, { apiKey: string; endpoint: string; name: string }>
+  >({
+    "claude-sonnet": { apiKey: "", endpoint: "", name: "Claude Sonnet 4.6" },
+    "gpt-5-3": { apiKey: "", endpoint: "", name: "GPT-5.3 Codex" },
+    "gemini-3-1-pro-preview": {
+      apiKey: "",
+      endpoint: "",
+      name: "Gemini 3.1 Pro Preview",
+    },
+    "gemini-3-flash-preview": {
+      apiKey: "",
+      endpoint: "",
+      name: "Gemini 3 Flash Preview",
+    },
+    "custom-1": {
+      apiKey: "",
+      endpoint: "",
+      name: "Custom model 1",
+    },
+  });
   const [modelConfig, setModelConfig] = useState<
     Record<string, { temperature: number; maxTokens: number }>
   >({
@@ -62,13 +97,46 @@ export default function AIModelSettings() {
     "gpt-5-3": { temperature: 0.5, maxTokens: 4096 },
     "gemini-3-1-pro-preview": { temperature: 0.8, maxTokens: 8192 },
     "gemini-3-flash-preview": { temperature: 0.7, maxTokens: 4096 },
+    "custom-1": { temperature: 0.7, maxTokens: 4096 },
   });
 
-  const toggleModel = (id: string, checked: boolean) => {
-    setEnabledModels((current) => ({
-      ...current,
-      [id]: checked,
+  const groupedModels = useMemo(() => {
+    return providers.map((provider) => ({
+      ...provider,
+      items: models.filter((model) => model.provider === provider.id),
     }));
+  }, []);
+
+  const allModelIds = useMemo(() => {
+    return [
+      ...models.map((model) => model.id),
+      ...customModels.map((m) => m.id),
+    ];
+  }, [customModels]);
+
+  const enabledCount = Object.values(enabledModels).filter(Boolean).length;
+
+  const toggleModel = (id: string, checked: boolean) => {
+    setEnabledModels((current) => {
+      const next = {
+        ...current,
+        [id]: checked,
+      };
+
+      if (!checked) {
+        setDefaultModel((currentDefault) => {
+          if (currentDefault !== id) {
+            return currentDefault;
+          }
+
+          const nextDefaultId = allModelIds.find((modelId) => next[modelId]);
+
+          return nextDefaultId ?? currentDefault;
+        });
+      }
+
+      return next;
+    });
   };
 
   const updateTemperature = (id: string, temperature: number) => {
@@ -91,151 +159,278 @@ export default function AIModelSettings() {
     }));
   };
 
+  const updateConnectionSetting = (
+    id: string,
+    field: "apiKey" | "endpoint" | "name",
+    value: string,
+  ) => {
+    setConnectionSettings((current) => ({
+      ...current,
+      [id]: {
+        ...current[id],
+        [field]: value,
+      },
+    }));
+  };
+
+  const toggleRowExpanded = (id: string, open: boolean) => {
+    setExpandedRows((current) => ({
+      ...current,
+      [id]: open,
+    }));
+  };
+
+  const toggleDeveloperSettings = (id: string, open: boolean) => {
+    setDeveloperSettingsOpen((current) => ({
+      ...current,
+      [id]: open,
+    }));
+  };
+
+  const addCustomModel = () => {
+    const nextIndex = customModels.length + 1;
+    const id = `custom-${nextIndex}`;
+
+    setCustomModels((current) => [...current, { id }]);
+    setEnabledModels((current) => ({ ...current, [id]: false }));
+    setConnectionSettings((current) => ({
+      ...current,
+      [id]: {
+        apiKey: "",
+        endpoint: "",
+        name: `Custom model ${nextIndex}`,
+      },
+    }));
+    setModelConfig((current) => ({
+      ...current,
+      [id]: { temperature: 0.7, maxTokens: 4096 },
+    }));
+  };
+
+  const renderModelRow = (
+    id: string,
+    name: string,
+    dotStyle: string,
+    showEndpoint: boolean,
+    showNameInput: boolean,
+  ) => {
+    const isEnabled = Boolean(enabledModels[id]);
+    const disableToggle = isEnabled && enabledCount === 1;
+    const rowExpanded = Boolean(expandedRows[id]);
+    const isDeveloperOpen = Boolean(developerSettingsOpen[id]);
+
+    return (
+      <Collapsible
+        key={id}
+        className="border-b border-border/70 last:border-b-0"
+        open={rowExpanded}
+        onOpenChange={(open) => toggleRowExpanded(id, open)}
+      >
+        <div className="flex items-center justify-between px-3 py-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className={`h-2 w-2 rounded-full ${dotStyle}`} aria-hidden />
+            <span className="truncate text-sm">{name}</span>
+          </div>
+
+          <div className="ml-3 flex items-center gap-2.5">
+            <label
+              className={`flex items-center gap-1.5 text-xs ${isEnabled ? "text-muted-foreground" : "text-muted-foreground/50"}`}
+            >
+              <input
+                type="radio"
+                name="default-model"
+                checked={defaultModel === id}
+                onChange={() => setDefaultModel(id)}
+                disabled={!isEnabled}
+                className="h-3 w-3 accent-emerald-500"
+              />
+              <span>Default</span>
+            </label>
+
+            <Switch
+              checked={isEnabled}
+              onCheckedChange={(checked) => toggleModel(id, Boolean(checked))}
+              disabled={disableToggle}
+              aria-label={`${name} enabled`}
+            />
+
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={`Configure ${name}`}
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </button>
+            </CollapsibleTrigger>
+          </div>
+        </div>
+
+        <CollapsibleContent>
+          <div className="border-t border-border/70 bg-background/50 px-3 pb-3 pt-1.5">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {showNameInput ? (
+                <label className="space-y-1 text-xs text-muted-foreground sm:col-span-2">
+                  <span>Model name</span>
+                  <input
+                    type="text"
+                    value={connectionSettings[id]?.name ?? ""}
+                    onChange={(event) =>
+                      updateConnectionSetting(id, "name", event.target.value)
+                    }
+                    className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </label>
+              ) : null}
+
+              <label className="space-y-1 text-xs text-muted-foreground">
+                <span>API Key</span>
+                <input
+                  type="password"
+                  value={connectionSettings[id]?.apiKey ?? ""}
+                  onChange={(event) =>
+                    updateConnectionSetting(id, "apiKey", event.target.value)
+                  }
+                  placeholder="Enter API key"
+                  className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+
+              {showEndpoint ? (
+                <label className="space-y-1 text-xs text-muted-foreground">
+                  <span>Endpoint</span>
+                  <input
+                    type="text"
+                    value={connectionSettings[id]?.endpoint ?? ""}
+                    onChange={(event) =>
+                      updateConnectionSetting(
+                        id,
+                        "endpoint",
+                        event.target.value,
+                      )
+                    }
+                    placeholder="https://api.example.com/v1"
+                    className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </label>
+              ) : null}
+            </div>
+
+            <Collapsible
+              open={isDeveloperOpen}
+              onOpenChange={(open) => toggleDeveloperSettings(id, open)}
+            >
+              <div className="mt-2.5 overflow-hidden rounded-lg border border-border/70">
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/50"
+                  >
+                    <span>Developer Settings</span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform ${isDeveloperOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent>
+                  <div className="grid gap-2 border-t border-border/70 px-2.5 py-2.5 sm:grid-cols-2">
+                    <label className="space-y-1 text-xs text-muted-foreground">
+                      <span>
+                        Temperature ({modelConfig[id]?.temperature.toFixed(1)})
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        value={modelConfig[id]?.temperature ?? 0.7}
+                        onChange={(event) =>
+                          updateTemperature(id, Number(event.target.value))
+                        }
+                        className="w-full accent-foreground"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-muted-foreground">
+                      <span>Max tokens</span>
+                      <input
+                        type="number"
+                        min={256}
+                        step={256}
+                        value={modelConfig[id]?.maxTokens ?? 4096}
+                        onChange={(event) =>
+                          updateMaxTokens(id, Number(event.target.value))
+                        }
+                        className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                    </label>
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  };
+
   return (
     <ProtectedRoute>
       <AppLayout>
-        <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-          <h1 className="mb-6 text-2xl font-semibold tracking-tight">Models</h1>
+        <div className="mx-auto max-w-3xl px-4 py-7 sm:px-6">
+          <h1 className="text-2xl font-semibold tracking-tight">AI Models</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Enable models and choose one default model. Changes save
+            automatically.
+          </p>
 
-          <section className="mb-8">
-            <h2 className="mb-2 text-sm text-muted-foreground">Models</h2>
-            <div className="overflow-hidden rounded-lg border border-border bg-card">
-              {models.map((model) => (
-                <div
-                  key={model.id}
-                  className="border-b border-border last:border-b-0"
-                >
-                  <Collapsible open={Boolean(enabledModels[model.id])}>
-                    <div className="flex items-center justify-between px-3 py-3 text-sm">
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className={`h-2 w-2 rounded-full ${providerDotStyles[model.provider]}`}
-                          aria-hidden
-                        />
-                        <span>{model.name}</span>
-                      </div>
-
-                      {model.alwaysOn ? (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>Always on</span>
-                          <Settings2 className="h-4 w-4" />
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={Boolean(enabledModels[model.id])}
-                            onCheckedChange={(checked) =>
-                              toggleModel(model.id, Boolean(checked))
-                            }
-                            aria-label={`${model.name} enabled`}
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            Enabled
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    {!model.alwaysOn ? (
-                      <CollapsibleContent>
-                        <div className="border-t border-border/80 bg-background/60 px-3 py-2.5">
-                          <div className="grid items-end gap-2.5 sm:grid-cols-[1fr_130px]">
-                            <div className="rounded-md border border-border/60 bg-background px-2.5 py-2">
-                              <div className="mb-1 flex items-center justify-between text-[11px]">
-                                <span className="text-muted-foreground">
-                                  Temperature
-                                </span>
-                                <span>
-                                  {modelConfig[model.id]?.temperature.toFixed(
-                                    1,
-                                  )}
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min={0}
-                                max={1}
-                                step={0.1}
-                                value={
-                                  modelConfig[model.id]?.temperature ?? 0.7
-                                }
-                                onChange={(event) =>
-                                  updateTemperature(
-                                    model.id,
-                                    Number(event.target.value),
-                                  )
-                                }
-                                className="w-full accent-foreground"
-                              />
-                            </div>
-
-                            <div className="rounded-md border border-border/60 bg-background px-2.5 py-2">
-                              <label
-                                htmlFor={`max-tokens-${model.id}`}
-                                className="mb-1 block text-[11px] text-muted-foreground"
-                              >
-                                Max tokens
-                              </label>
-                              <input
-                                id={`max-tokens-${model.id}`}
-                                type="number"
-                                min={256}
-                                step={256}
-                                value={modelConfig[model.id]?.maxTokens ?? 4096}
-                                onChange={(event) =>
-                                  updateMaxTokens(
-                                    model.id,
-                                    Number(event.target.value),
-                                  )
-                                }
-                                className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </CollapsibleContent>
-                    ) : null}
-                  </Collapsible>
+          <section className="mt-7 space-y-6">
+            {groupedModels.map((provider) => (
+              <div key={provider.id}>
+                <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {provider.label}
+                </h2>
+                <div className="overflow-hidden rounded-xl border border-border/80 bg-card/30">
+                  {provider.items.map((model) =>
+                    renderModelRow(
+                      model.id,
+                      model.name,
+                      providerDotStyles[model.provider],
+                      false,
+                      false,
+                    ),
+                  )}
                 </div>
-              ))}
-            </div>
-          </section>
+              </div>
+            ))}
 
-          <section className="mb-8">
-            <div className="mb-1 flex items-center gap-2">
-              <h2 className="text-sm font-medium">Custom Models</h2>
-              <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                Beta
-              </span>
-            </div>
-            <p className="mb-3 text-xs text-muted-foreground">
-              Connect OpenAI-compatible API models.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-center"
-            >
-              + Add custom model
-            </Button>
-          </section>
-
-          <section>
-            <h2 className="mb-1 text-sm font-medium">API Keys</h2>
-            <p className="mb-3 text-xs text-muted-foreground">
-              Your keys are stored locally in your browser.
-            </p>
-            <div className="overflow-hidden rounded-lg border border-border bg-card">
-              {apiKeys.map((label) => (
-                <div
-                  key={label}
-                  className="flex items-center justify-between border-b border-border px-3 py-3 text-sm last:border-b-0"
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Custom
+                </h2>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={addCustomModel}
+                  className="h-7 rounded-md px-2 text-xs"
                 >
-                  <span>{label}</span>
-                  <Button type="button" size="xs" variant="outline">
-                    Configure
-                  </Button>
-                </div>
-              ))}
+                  Add custom model
+                </Button>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-border/80 bg-card/30">
+                {customModels.map((model) =>
+                  renderModelRow(
+                    model.id,
+                    connectionSettings[model.id]?.name ?? "Custom model",
+                    providerDotStyles.custom,
+                    true,
+                    true,
+                  ),
+                )}
+              </div>
             </div>
           </section>
         </div>
