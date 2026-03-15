@@ -8,6 +8,7 @@ import ResetPassword from "@/pages/auth/ResetPassword";
 import Apps from "@/pages/Apps";
 import Project from "@/pages/Project";
 import Settings from "@/pages/Settings";
+import AIModelSettings from "@/pages/AIModelSettings";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/apps" element={<Apps />} />
       <Route path="/projects/:id" element={<Project />} />
       <Route path="/account/settings" element={<Settings />} />
+      <Route path="/account/ai-model-settings" element={<AIModelSettings />} />
     </Routes>
   );
 }
