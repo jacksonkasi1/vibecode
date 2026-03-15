@@ -70,7 +70,7 @@ export default function Apps() {
               <h1 className="text-lg font-medium tracking-tight">vibe</h1>
             </div>
 
-            <Panel className="mb-3 bg-transparent">
+            <Panel className="mb-3 border-0 bg-transparent">
               <div className="rounded-lg border border-border bg-card p-1.5 shadow-sm transition-all focus-within:border-ring/40 focus-within:ring-1 focus-within:ring-ring/20">
                 <textarea
                   placeholder="Enter the prompt"
