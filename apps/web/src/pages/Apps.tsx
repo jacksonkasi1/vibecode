@@ -1,15 +1,22 @@
 // ** import lib
+import { useState } from "react";
 import { ArrowUp, Grid2X2, Paperclip, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 // ** import components
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { OrchidsMark, Panel } from "@/components/orchids-ui";
+import { VibeMark, Panel } from "@/components/vibe-ui";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const projects = [
-  { id: "1", name: "Orchids App Clone" },
+  { id: "1", name: "Vibe App Clone" },
   { id: "2", name: "Nexo Studio Clone" },
   { id: "3", name: "Meridian: Architecture of Silence" },
 ];
@@ -21,6 +28,8 @@ const modelOptions = [
 ] as const;
 
 export default function Apps() {
+  const [selectedModel, setSelectedModel] = useState<string>(modelOptions[0]);
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-background text-foreground">
@@ -35,68 +44,90 @@ export default function Apps() {
           </header>
 
           <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col pt-4 sm:pt-8">
-            <div className="mb-7 flex items-center justify-center gap-2">
-              <OrchidsMark className="h-9 w-9" />
-              <h1 className="text-4xl font-semibold tracking-tight">orchids</h1>
+            <div className="mb-6 flex items-center justify-center gap-2">
+              <VibeMark className="h-5 w-5" />
+              <h1 className="text-lg font-medium tracking-tight">vibe</h1>
             </div>
 
-            <Panel className="mb-3 bg-[hsl(var(--orchids-panel-2))]">
-              <div className="rounded-2xl border border-input bg-card p-2 shadow-sm transition-all focus-within:border-ring/40 focus-within:ring-1 focus-within:ring-ring/20">
+            <Panel className="mb-3 bg-transparent">
+              <div className="rounded-lg border border-border bg-card p-1.5 shadow-sm transition-all focus-within:border-ring/40 focus-within:ring-1 focus-within:ring-ring/20">
                 <textarea
                   placeholder="Enter the prompt"
-                  className="max-h-36 min-h-[72px] w-full resize-none bg-transparent px-2 pt-2 text-sm leading-5 placeholder:text-muted-foreground"
+                  className="max-h-32 min-h-[64px] w-full resize-none bg-transparent px-2 pt-1.5 text-[13px] leading-5 placeholder:text-muted-foreground focus:outline-none"
                 />
-                <div className="mt-1 flex items-center justify-between gap-2 px-1 pb-1">
-                  <div className="flex items-center gap-1.5">
+                <div className="mt-1 flex items-center justify-between gap-2 px-1 pb-0.5">
+                  <div className="flex items-center gap-1">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-6 items-center gap-1.5 rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                        >
+                          ✦ {selectedModel}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="start"
+                        className="w-56 text-[13px]"
+                      >
+                        {modelOptions.map((model) => (
+                          <DropdownMenuItem
+                            key={model}
+                            onClick={() => setSelectedModel(model)}
+                          >
+                            {model}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <button
                       type="button"
-                      className="inline-flex h-6 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border/50 bg-background/50 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
-                      ✦ {modelOptions[0]}
+                      <Plus className="h-3 w-3" />
                     </button>
                     <button
                       type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border/50 bg-background/50 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                    >
-                      <Grid2X2 className="h-3.5 w-3.5" />
+                      <Grid2X2 className="h-3 w-3" />
                     </button>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
-                      <Paperclip className="h-3.5 w-3.5" />
+                      <Paperclip className="h-3 w-3" />
                     </button>
                     <Link
                       to="/projects/1"
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background shadow-sm transition-all hover:scale-105 hover:shadow"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-foreground text-background shadow-sm transition-opacity hover:opacity-90"
                     >
-                      <ArrowUp className="h-3.5 w-3.5" />
+                      <ArrowUp className="h-3 w-3" />
                     </Link>
                   </div>
                 </div>
               </div>
             </Panel>
 
-            <div className="mb-7">
+            <div className="mb-8">
               <button
                 type="button"
-                className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground"
+                className="rounded-md border border-border/50 bg-background/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
                 Create Blank Project
               </button>
             </div>
 
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm text-muted-foreground">Recent projects</h2>
-              <button type="button" className="text-xs text-muted-foreground">
+            <div className="mb-2.5 flex items-center justify-between px-1">
+              <h2 className="text-[12px] font-medium text-muted-foreground">
+                Recent projects
+              </h2>
+              <button
+                type="button"
+                className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              >
                 View all
               </button>
             </div>
@@ -106,10 +137,12 @@ export default function Apps() {
                 <Link
                   key={project.id}
                   to={`/projects/${project.id}`}
-                  className="flex items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-secondary/50"
+                  className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] hover:bg-secondary/50"
                 >
-                  <span>{project.name}</span>
-                  <span className="text-xs text-muted-foreground">Cloud</span>
+                  <span className="text-foreground/90">{project.name}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Cloud
+                  </span>
                 </Link>
               ))}
             </div>

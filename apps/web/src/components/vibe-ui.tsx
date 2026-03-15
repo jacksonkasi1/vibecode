@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 // ** import utils
 import { cn } from "@/lib/utils";
 
-export function OrchidsMark({ className }: { className?: string }) {
+export function VibeMark({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"

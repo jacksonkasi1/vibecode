@@ -96,12 +96,12 @@ body {
   --sidebar-border: hsl(0 0% 88%);
   --sidebar-ring: hsl(0 0% 38%);
 
-  --orchids-panel: 0 0% 100%;
-  --orchids-panel-2: 0 0% 96%;
-  --orchids-workspace: 0 0% 95%;
-  --orchids-editor: 0 0% 100%;
-  --orchids-terminal: 0 0% 96%;
-  --orchids-soft: 0 0% 92%;
+  --vibe-panel: 0 0% 100%;
+  --vibe-panel-2: 0 0% 96%;
+  --vibe-workspace: 0 0% 95%;
+  --vibe-editor: 0 0% 100%;
+  --vibe-terminal: 0 0% 96%;
+  --vibe-soft: 0 0% 92%;
 }
 
 .dark {
@@ -137,12 +137,12 @@ body {
   --sidebar-border: hsl(0 0% 22%);
   --sidebar-ring: hsl(0 0% 78%);
 
-  --orchids-panel: 0 0% 9%;
-  --orchids-panel-2: 0 0% 10%;
-  --orchids-workspace: 0 0% 8%;
-  --orchids-editor: 0 0% 7%;
-  --orchids-terminal: 0 0% 7%;
-  --orchids-soft: 0 0% 14%;
+  --vibe-panel: 0 0% 9%;
+  --vibe-panel-2: 0 0% 10%;
+  --vibe-workspace: 0 0% 8%;
+  --vibe-editor: 0 0% 7%;
+  --vibe-terminal: 0 0% 7%;
+  --vibe-soft: 0 0% 14%;
 }
 
 @layer base {
