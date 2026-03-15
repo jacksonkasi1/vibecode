@@ -141,7 +141,7 @@ export function VibeAssistantThread() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="inline-flex h-6 items-center gap-1 rounded-full border border-border bg-background px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full border border-border bg-background px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
                       <SelectedModeIcon className="size-3" />
                       {selectedMode}
@@ -172,7 +172,7 @@ export function VibeAssistantThread() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="ml-1 inline-flex h-6 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      className="ml-1 inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
                       ✦ {selectedModel}
                     </button>
@@ -197,13 +197,13 @@ export function VibeAssistantThread() {
                 <ComposerPrimitive.AddAttachment asChild>
                   <button
                     type="button"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                   </button>
                 </ComposerPrimitive.AddAttachment>
 
-                <ComposerPrimitive.Send className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-foreground text-background shadow-sm transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50">
+                <ComposerPrimitive.Send className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md bg-foreground text-background shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50">
                   <ArrowUp className="h-3.5 w-3.5" />
                 </ComposerPrimitive.Send>
               </div>
