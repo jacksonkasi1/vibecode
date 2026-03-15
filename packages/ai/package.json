@@ -1,0 +1,32 @@
+{
+  "name": "@repo/ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    },
+    "./providers": {
+      "import": "./src/providers/index.ts",
+      "types": "./src/providers/index.ts"
+    },
+    "./registry": {
+      "import": "./src/registry.ts",
+      "types": "./src/registry.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/node": "^22",
+    "typescript": "^5.7.2"
+  }
+}
