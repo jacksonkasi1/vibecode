@@ -41,26 +41,26 @@ export function Providers({ children }: ProvidersProps) {
   const navigate = useNavigate();
 
   return (
-    <ThemeProvider defaultTheme="light" storageKey="flowstack-ui-theme">
+    <ThemeProvider defaultTheme="light" storageKey="vibe-ui-theme">
       <QueryClientProvider client={queryClient}>
         <AuthUIProvider
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           authClient={authClient as any}
-        baseURL={APP_URLS.frontend}
-        navigate={navigate}
-        Link={LinkWrapper}
-        social={{
-          providers: ["google"],
-        }}
-        magicLink={true}
-        account={{
-          fields: ["image", "name"],
-        }}
-        avatar={{
-          upload: uploadAvatar,
-          delete: deleteAvatar,
-        }}
-      >
+          baseURL={APP_URLS.frontend}
+          navigate={navigate}
+          Link={LinkWrapper}
+          social={{
+            providers: ["google"],
+          }}
+          magicLink={true}
+          account={{
+            fields: ["image", "name"],
+          }}
+          avatar={{
+            upload: uploadAvatar,
+            delete: deleteAvatar,
+          }}
+        >
           {children}
           <Toaster />
         </AuthUIProvider>
