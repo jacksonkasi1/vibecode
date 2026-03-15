@@ -6,12 +6,12 @@ Customize verification, password reset, and magic link emails.
 
 Located in `packages/auth/src/email/`:
 
-| File | Purpose |
-|------|---------|
+| File                         | Purpose            |
+| ---------------------------- | ------------------ |
 | `send-verification-email.ts` | Email verification |
-| `send-reset-password.ts` | Password reset |
-| `send-magic-link.ts` | Magic link login |
-| `send-invitation.ts` | Org invitations |
+| `send-reset-password.ts`     | Password reset     |
+| `send-magic-link.ts`         | Magic link login   |
+| `send-invitation.ts`         | Org invitations    |
 
 ---
 
@@ -56,7 +56,7 @@ emailAndPassword: {
 ```ts
 const buildEmailUrlWithFrontendCallback = (
   originalUrl: string,
-  frontendPath: string = "/dashboard"
+  frontendPath: string = "/dashboard",
 ): string => {
   const urlObj = new URL(originalUrl);
   urlObj.searchParams.set("callbackURL", `${frontendURL}${frontendPath}`);

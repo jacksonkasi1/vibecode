@@ -16,11 +16,12 @@ export const APP_URLS = {
 ```
 
 **Usage:**
+
 ```tsx
 import { APP_URLS } from "@/config/urls";
 
 // In providers
-<AuthUIProvider baseURL={APP_URLS.frontend} />
+<AuthUIProvider baseURL={APP_URLS.frontend} />;
 
 // In API client
 const apiClient = axios.create({ baseURL: APP_URLS.api });
@@ -54,6 +55,7 @@ export const AUTH_REDIRECTS = {
 ```
 
 **Usage:**
+
 ```tsx
 // Frontend
 import { AUTH_REDIRECTS } from "@/config/redirects";
@@ -112,6 +114,7 @@ NODE_ENV=production
 ### Change Default Redirect After Login
 
 **Frontend:**
+
 ```ts
 // apps/web/src/config/redirects.ts
 export const AUTH_REDIRECTS = {
@@ -120,6 +123,7 @@ export const AUTH_REDIRECTS = {
 ```
 
 **Backend:**
+
 ```ts
 // packages/auth/src/config/redirects.ts
 export const AUTH_REDIRECTS = {
@@ -146,11 +150,11 @@ See [Adding Providers](./adding-providers.md) guide.
 
 ## Quick Reference
 
-| What to Change | File to Edit |
-|----------------|--------------|
+| What to Change      | File to Edit                               |
+| ------------------- | ------------------------------------------ |
 | Login redirect path | `config/redirects.ts` (frontend + backend) |
-| Frontend URL | `config/urls.ts` (frontend) |
-| API URL | `config/urls.ts` (frontend) |
-| OAuth providers | `packages/auth/src/auth.ts` |
-| Email templates | `packages/auth/src/email/*.ts` |
-| Trusted origins | `.env` → `ALLOWED_ORIGINS` |
+| Frontend URL        | `config/urls.ts` (frontend)                |
+| API URL             | `config/urls.ts` (frontend)                |
+| OAuth providers     | `packages/auth/src/auth.ts`                |
+| Email templates     | `packages/auth/src/email/*.ts`             |
+| Trusted origins     | `.env` → `ALLOWED_ORIGINS`                 |
