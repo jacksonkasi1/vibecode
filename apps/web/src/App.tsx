@@ -5,7 +5,8 @@ import { SignedIn, SignedOut } from "@daveyplate/better-auth-ui";
 // ** import pages
 import AuthPage from "@/pages/auth/AuthPage";
 import ResetPassword from "@/pages/auth/ResetPassword";
-import Dashboard from "@/pages/Dashboard";
+import Apps from "@/pages/Apps";
+import Project from "@/pages/Project";
 import Settings from "@/pages/Settings";
 
 export default function App() {
@@ -16,7 +17,7 @@ export default function App() {
         element={
           <>
             <SignedIn>
-              <Navigate to="/dashboard" replace />
+              <Navigate to="/apps" replace />
             </SignedIn>
             <SignedOut>
               <Navigate to="/auth/sign-in" replace />
@@ -26,7 +27,8 @@ export default function App() {
       />
       <Route path="/auth/:pathname" element={<AuthPage />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/apps" element={<Apps />} />
+      <Route path="/projects/:id" element={<Project />} />
       <Route path="/account/settings" element={<Settings />} />
     </Routes>
   );
