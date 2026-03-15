@@ -24,7 +24,7 @@ const ThemeProviderContext = createContext<ThemeProviderState | undefined>(
 export function ThemeProvider({
   children,
   defaultTheme = "light",
-  storageKey = "flowstack-ui-theme",
+  storageKey = "vibe-ui-theme",
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(

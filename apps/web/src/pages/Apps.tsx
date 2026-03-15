@@ -10,9 +10,10 @@ import {
   CloudOff,
   Compass,
   Cpu,
-  HardDrive,
   Infinity,
+  Loader2,
   Paperclip,
+  Pencil,
   Plus,
   Settings,
 } from "lucide-react";
@@ -23,7 +24,7 @@ import { toast } from "sonner";
 // ** import apis
 import { createExecution } from "@/rest-api/executions";
 import { getModels } from "@/rest-api/models";
-import { createProject, getProjects } from "@/rest-api/projects";
+import { createProject, getProjects, updateProject } from "@/rest-api/projects";
 import {
   createWorkspace,
   getWorkspaces,
@@ -31,6 +32,7 @@ import {
 } from "@/rest-api/workspaces";
 
 // ** import components
+import { WorkspaceConfigCard } from "@/components/apps/workspace-config-card";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { VibeMark, Panel } from "@/components/vibe-ui";
 import { Button } from "@/components/ui/button";
@@ -42,324 +44,35 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
-type WorkspacePreset = "small" | "medium" | "large" | "custom";
-type ResourceKey = "cpu" | "ram" | "storage";
-
-type WorkspaceResources = {
-  cpu: number;
-  ram: number;
-  storage: number;
-};
-
-type WorkspaceMetadata = {
-  preset?: WorkspacePreset;
-  modelId?: string;
-  location?: "cloud" | "local";
-  resources?: WorkspaceResources;
-};
-
-type ResourceInputs = Record<ResourceKey, string>;
-type ResourceErrors = Partial<Record<ResourceKey, string>>;
+// ** import utils
+import {
+  defaultResources,
+  hasErrors,
+  parseNumeric,
+  parseWithMin,
+  parseWorkspaceMetadata,
+  presetFromResources,
+  presetLabel,
+  presetShortLabel,
+  presetValues,
+  resourceMins,
+  resourcesFromWorkspace,
+  resourcesToInputs,
+  validateResourceInputs,
+} from "@/lib/workspace-config";
+import type {
+  ResourceInputs,
+  ResourceKey,
+  WorkspaceMetadata,
+  WorkspacePreset,
+  WorkspaceResources,
+} from "@/lib/workspace-config";
 
 const modeOptions = ["Agent", "Plan"] as const;
 const modeIcons = {
   Agent: Infinity,
   Plan: Compass,
 } as const;
-
-const resourceMins: Record<ResourceKey, number> = {
-  cpu: 1,
-  ram: 1,
-  storage: 5,
-};
-
-const presetValues: Record<
-  Exclude<WorkspacePreset, "custom">,
-  WorkspaceResources
-> = {
-  small: { cpu: 2, ram: 4, storage: 10 },
-  medium: { cpu: 4, ram: 8, storage: 20 },
-  large: { cpu: 8, ram: 16, storage: 50 },
-};
-
-const presetCards = [
-  ["small", "Small", "2 vCPU, 4GB, 10GB"],
-  ["medium", "Medium", "4 vCPU, 8GB, 20GB"],
-  ["large", "Large", "8 vCPU, 16GB, 50GB"],
-  ["custom", "Custom", "Adjust"],
-] as const;
-
-const defaultResources = presetValues.medium;
-
-function parseWorkspaceMetadata(metadata: string | null): WorkspaceMetadata {
-  if (!metadata) return {};
-
-  try {
-    return JSON.parse(metadata) as WorkspaceMetadata;
-  } catch {
-    return {};
-  }
-}
-
-function resourcesToInputs(resources: WorkspaceResources): ResourceInputs {
-  return {
-    cpu: String(resources.cpu),
-    ram: String(resources.ram),
-    storage: String(resources.storage),
-  };
-}
-
-function resourcesFromWorkspace(workspace?: Workspace): WorkspaceResources {
-  if (!workspace) return { ...defaultResources };
-
-  const metadata = parseWorkspaceMetadata(workspace.metadata);
-  const resources = metadata.resources;
-
-  if (
-    resources &&
-    Number.isFinite(resources.cpu) &&
-    Number.isFinite(resources.ram) &&
-    Number.isFinite(resources.storage)
-  ) {
-    return {
-      cpu: resources.cpu,
-      ram: resources.ram,
-      storage: resources.storage,
-    };
-  }
-
-  return { ...defaultResources };
-}
-
-function presetFromResources(resources: WorkspaceResources): WorkspacePreset {
-  if (
-    resources.cpu === presetValues.small.cpu &&
-    resources.ram === presetValues.small.ram &&
-    resources.storage === presetValues.small.storage
-  ) {
-    return "small";
-  }
-
-  if (
-    resources.cpu === presetValues.medium.cpu &&
-    resources.ram === presetValues.medium.ram &&
-    resources.storage === presetValues.medium.storage
-  ) {
-    return "medium";
-  }
-
-  if (
-    resources.cpu === presetValues.large.cpu &&
-    resources.ram === presetValues.large.ram &&
-    resources.storage === presetValues.large.storage
-  ) {
-    return "large";
-  }
-
-  return "custom";
-}
-
-function parseNumeric(value: string): number | null {
-  if (!/^[0-9]+$/.test(value)) return null;
-
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) return null;
-
-  return parsed;
-}
-
-function validateResourceInputs(inputs: ResourceInputs): ResourceErrors {
-  const errors: ResourceErrors = {};
-
-  (Object.keys(inputs) as ResourceKey[]).forEach((key) => {
-    const raw = inputs[key].trim();
-    if (!raw) {
-      errors[key] = "Required";
-      return;
-    }
-
-    const parsed = parseNumeric(raw);
-    if (parsed === null) {
-      errors[key] = "Numbers only";
-      return;
-    }
-
-    if (parsed < resourceMins[key]) {
-      errors[key] = `Min ${resourceMins[key]}`;
-    }
-  });
-
-  return errors;
-}
-
-function hasErrors(errors: ResourceErrors): boolean {
-  return Boolean(errors.cpu || errors.ram || errors.storage);
-}
-
-function parseWithMin(value: string, key: ResourceKey): number {
-  const parsed = parseNumeric(value);
-  if (parsed === null) return resourceMins[key];
-  return Math.max(parsed, resourceMins[key]);
-}
-
-function presetLabel(preset: WorkspacePreset): string {
-  if (preset === "small") return "Small";
-  if (preset === "medium") return "Medium";
-  if (preset === "large") return "Large";
-  return "Custom";
-}
-
-function presetShortLabel(preset: WorkspacePreset): string {
-  if (preset === "small") return "S";
-  if (preset === "medium") return "M";
-  if (preset === "large") return "L";
-  return "C";
-}
-
-function ResourceInputsForm({
-  inputs,
-  errors,
-  onInputChange,
-}: {
-  inputs: ResourceInputs;
-  errors: ResourceErrors;
-  onInputChange: (key: ResourceKey, value: string) => void;
-}) {
-  return (
-    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-      {(
-        [
-          ["cpu", "CPU"],
-          ["ram", "RAM (GB)"],
-          ["storage", "Storage (GB)"],
-        ] as const
-      ).map(([key, label]) => (
-        <label key={key} className="text-[11px] text-muted-foreground">
-          {label}
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={inputs[key]}
-            onChange={(event) => onInputChange(key, event.target.value)}
-            className="mt-1 h-7 w-full rounded-md border border-border/60 bg-background px-2 text-[11px] text-foreground"
-          />
-          {errors[key] ? (
-            <span className="mt-1 block text-[10px] text-destructive">
-              {errors[key]}
-            </span>
-          ) : null}
-        </label>
-      ))}
-    </div>
-  );
-}
-
-function WorkspaceConfigCard({
-  title,
-  preset,
-  onPresetSelect,
-  showCustomize,
-  onToggleCustomize,
-  inputs,
-  errors,
-  onInputChange,
-  resources,
-  onCancel,
-  onSubmit,
-  submitLabel,
-  submittingLabel,
-  isSubmitting,
-  className,
-}: {
-  title?: string;
-  preset: WorkspacePreset;
-  onPresetSelect: (preset: WorkspacePreset) => void;
-  showCustomize: boolean;
-  onToggleCustomize: () => void;
-  inputs: ResourceInputs;
-  errors: ResourceErrors;
-  onInputChange: (key: ResourceKey, value: string) => void;
-  resources: WorkspaceResources;
-  onCancel: () => void;
-  onSubmit: () => void;
-  submitLabel: string;
-  submittingLabel: string;
-  isSubmitting: boolean;
-  className: string;
-}) {
-  return (
-    <div className={className}>
-      {title ? <h3 className="mb-2 text-[12px] font-medium">{title}</h3> : null}
-
-      <p className="mb-2 text-[11px] text-muted-foreground">Workspace preset</p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {presetCards.map(([value, label, summary]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => onPresetSelect(value)}
-            className={[
-              "rounded-md border px-2 py-1.5 text-left transition-colors",
-              preset === value
-                ? "border-foreground/40 bg-secondary text-foreground"
-                : "border-border/60 text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
-            ].join(" ")}
-          >
-            <div className="text-[11px] font-medium">{label}</div>
-            <div className="text-[10px]">{summary}</div>
-          </button>
-        ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={onToggleCustomize}
-        className="mt-2 text-[11px] text-muted-foreground hover:text-foreground"
-      >
-        Customize
-      </button>
-
-      {showCustomize || preset === "custom" ? (
-        <ResourceInputsForm
-          inputs={inputs}
-          errors={errors}
-          onInputChange={onInputChange}
-        />
-      ) : null}
-
-      <div className="mt-3 flex items-center justify-between">
-        <div className="inline-flex items-center gap-2 text-[11px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <Cpu className="h-3 w-3" /> {resources.cpu} vCPU
-          </span>
-          <span>{resources.ram}GB RAM</span>
-          <span className="inline-flex items-center gap-1">
-            <HardDrive className="h-3 w-3" /> {resources.storage}GB
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={isSubmitting}
-            className="rounded-md bg-foreground px-2.5 py-1 text-[11px] text-background disabled:opacity-60"
-          >
-            {isSubmitting ? submittingLabel : submitLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function Apps() {
   const navigate = useNavigate();
@@ -394,6 +107,8 @@ export default function Apps() {
     resourcesToInputs(defaultResources),
   );
   const [showContinueCustomize, setShowContinueCustomize] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState("");
 
   const createErrors = useMemo(
     () => validateResourceInputs(createInputs),
@@ -404,7 +119,7 @@ export default function Apps() {
     [continueInputs],
   );
 
-  const { data: modelsData } = useQuery({
+  const { data: modelsData, isLoading: isModelsLoading } = useQuery({
     queryKey: ["models"],
     queryFn: () => getModels(),
   });
@@ -432,7 +147,7 @@ export default function Apps() {
   const SelectedModeIcon = modeIcons[selectedMode];
   const selectedModelName =
     models.find((model) => model.id === selectedModelId)?.displayName ||
-    "Gemini 3.1 Pro";
+    (isModelsLoading ? "Loading models..." : "Select model");
 
   const latestWorkspaceByProject = useMemo(() => {
     return workspaces.reduce<Record<string, Workspace>>((acc, workspace) => {
@@ -571,6 +286,28 @@ export default function Apps() {
     onError: (error) => {
       toast.error(
         `Failed to continue project: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    },
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: async ({
+      projectId,
+      name,
+    }: {
+      projectId: string;
+      name: string;
+    }) => {
+      return updateProject(projectId, { name });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setEditingProjectId(null);
+      setEditingProjectName("");
+    },
+    onError: (error) => {
+      toast.error(
+        `Failed to rename project: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     },
   });
@@ -739,6 +476,37 @@ export default function Apps() {
     setShowContinueCustomize(false);
   };
 
+  const handleStartEditingProject = (project: Project) => {
+    setEditingProjectId(project.id);
+    setEditingProjectName(project.name);
+  };
+
+  const handleCancelEditingProject = () => {
+    setEditingProjectId(null);
+    setEditingProjectName("");
+  };
+
+  const handleSaveProjectName = (project: Project) => {
+    if (updateProjectMutation.isPending || editingProjectId !== project.id)
+      return;
+
+    const nextName = editingProjectName.trim();
+    if (!nextName) {
+      toast.error("Project name is required");
+      return;
+    }
+
+    if (nextName === project.name) {
+      handleCancelEditingProject();
+      return;
+    }
+
+    updateProjectMutation.mutate({
+      projectId: project.id,
+      name: nextName,
+    });
+  };
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-background text-foreground">
@@ -829,7 +597,17 @@ export default function Apps() {
                         align="start"
                         className="w-56 text-[11px]"
                       >
-                        {models.length === 0 ? (
+                        {isModelsLoading ? (
+                          [0, 1, 2].map((item) => (
+                            <DropdownMenuItem
+                              key={`model-skeleton-${item}`}
+                              className="px-2 py-1"
+                              disabled
+                            >
+                              <span className="h-3 w-full animate-pulse rounded bg-muted" />
+                            </DropdownMenuItem>
+                          ))
+                        ) : models.length === 0 ? (
                           <DropdownMenuItem
                             className="px-2 py-1 text-[11px]"
                             disabled
@@ -947,8 +725,19 @@ export default function Apps() {
 
             <div className="space-y-1">
               {isProjectsLoading ? (
-                <div className="px-2 py-1.5 text-[13px] text-muted-foreground">
-                  Loading projects...
+                <div className="space-y-1">
+                  {[0, 1, 2, 3].map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center gap-1 px-1 py-1"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/50 px-2 py-1.5">
+                        <div className="h-3.5 w-32 animate-pulse rounded bg-muted" />
+                        <div className="h-5 w-36 animate-pulse rounded-md bg-muted" />
+                      </div>
+                      <div className="h-6 w-6 animate-pulse rounded-md bg-muted" />
+                    </div>
+                  ))}
                 </div>
               ) : recentProjects.length === 0 ? (
                 <div className="px-2 py-1.5 text-[13px] text-muted-foreground">
@@ -956,6 +745,7 @@ export default function Apps() {
                 </div>
               ) : (
                 recentProjects.map(({ project, workspace }) => {
+                  const isEditingProject = editingProjectId === project.id;
                   const isOnline = workspace
                     ? ["running", "starting"].includes(workspace.status)
                     : false;
@@ -969,55 +759,151 @@ export default function Apps() {
 
                   return (
                     <div key={project.id}>
-                      <div className="flex items-center gap-1 px-1 py-1">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            quickContinueMutation.mutate(project.id)
-                          }
-                          disabled={quickContinueMutation.isPending}
-                          className="group flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <div className="truncate font-medium text-foreground/90 transition-colors group-hover:text-foreground">
-                            {project.name}
+                      <div className="group flex items-center gap-1 px-1 py-1">
+                        {isEditingProject ? (
+                          <div className="flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px]">
+                            <div className="min-w-0 flex flex-1 items-center gap-1.5">
+                              <input
+                                autoFocus
+                                value={editingProjectName}
+                                onChange={(event) =>
+                                  setEditingProjectName(event.target.value)
+                                }
+                                onBlur={() => handleSaveProjectName(project)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    handleSaveProjectName(project);
+                                  }
+
+                                  if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    handleCancelEditingProject();
+                                  }
+                                }}
+                                className="min-w-0 flex-1 bg-transparent p-0 font-medium text-foreground/90 outline-none"
+                              />
+                              {updateProjectMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
+                              ) : null}
+                            </div>
+                            <span
+                              className={[
+                                "ml-3 inline-flex shrink-0 items-center gap-2 text-[11px]",
+                                isOnline
+                                  ? "text-emerald-600"
+                                  : "text-muted-foreground",
+                              ].join(" ")}
+                            >
+                              <span className="inline-flex items-center gap-1.5 rounded-md border border-border/50 px-1.5 py-0.5 text-muted-foreground">
+                                <Cpu className="h-3 w-3" />
+                                <span className="hidden lg:inline">
+                                  {presetLabel(selectedPreset)}{" "}
+                                  {selectedResources.cpu}
+                                  CPU {selectedResources.ram}G{" "}
+                                  {selectedResources.storage}G
+                                </span>
+                                <span className="lg:hidden">
+                                  {presetShortLabel(selectedPreset)}{" "}
+                                  {selectedResources.cpu}/
+                                  {selectedResources.ram}/
+                                  {selectedResources.storage}
+                                </span>
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                {isOnline ? (
+                                  <Cloud className="h-3 w-3" />
+                                ) : (
+                                  <CloudOff className="h-3 w-3" />
+                                )}
+                                <span className="hidden lg:inline">
+                                  {isOnline ? "Cloud Online" : "Offline"}
+                                </span>
+                                <span className="lg:hidden">
+                                  {isOnline ? "On" : "Off"}
+                                </span>
+                              </span>
+                            </span>
                           </div>
-                          <span
+                        ) : (
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              if (quickContinueMutation.isPending) return;
+                              quickContinueMutation.mutate(project.id);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter" && event.key !== " ")
+                                return;
+                              event.preventDefault();
+                              if (quickContinueMutation.isPending) return;
+                              quickContinueMutation.mutate(project.id);
+                            }}
                             className={[
-                              "ml-3 inline-flex shrink-0 items-center gap-2 text-[11px]",
-                              isOnline
-                                ? "text-emerald-600"
-                                : "text-muted-foreground",
+                              "flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-secondary/50",
+                              quickContinueMutation.isPending
+                                ? "cursor-not-allowed opacity-60"
+                                : "cursor-pointer",
                             ].join(" ")}
                           >
-                            <span className="inline-flex items-center gap-1.5 rounded-md border border-border/50 px-1.5 py-0.5 text-muted-foreground">
-                              <Cpu className="h-3 w-3" />
-                              <span className="hidden lg:inline">
-                                {presetLabel(selectedPreset)}{" "}
-                                {selectedResources.cpu}
-                                CPU {selectedResources.ram}G{" "}
-                                {selectedResources.storage}G
+                            <div className="min-w-0 flex items-center gap-1.5">
+                              <div className="truncate font-medium text-foreground/90 transition-colors group-hover:text-foreground">
+                                {project.name}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  handleStartEditingProject(project);
+                                }}
+                                disabled={updateProjectMutation.isPending}
+                                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-all hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                                aria-label={`Rename ${project.name}`}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                            </div>
+                            <span
+                              className={[
+                                "ml-3 inline-flex shrink-0 items-center gap-2 text-[11px]",
+                                isOnline
+                                  ? "text-emerald-600"
+                                  : "text-muted-foreground",
+                              ].join(" ")}
+                            >
+                              <span className="inline-flex items-center gap-1.5 rounded-md border border-border/50 px-1.5 py-0.5 text-muted-foreground">
+                                <Cpu className="h-3 w-3" />
+                                <span className="hidden lg:inline">
+                                  {presetLabel(selectedPreset)}{" "}
+                                  {selectedResources.cpu}
+                                  CPU {selectedResources.ram}G{" "}
+                                  {selectedResources.storage}G
+                                </span>
+                                <span className="lg:hidden">
+                                  {presetShortLabel(selectedPreset)}{" "}
+                                  {selectedResources.cpu}/
+                                  {selectedResources.ram}/
+                                  {selectedResources.storage}
+                                </span>
                               </span>
-                              <span className="lg:hidden">
-                                {presetShortLabel(selectedPreset)}{" "}
-                                {selectedResources.cpu}/{selectedResources.ram}/
-                                {selectedResources.storage}
+                              <span className="inline-flex items-center gap-1">
+                                {isOnline ? (
+                                  <Cloud className="h-3 w-3" />
+                                ) : (
+                                  <CloudOff className="h-3 w-3" />
+                                )}
+                                <span className="hidden lg:inline">
+                                  {isOnline ? "Cloud Online" : "Offline"}
+                                </span>
+                                <span className="lg:hidden">
+                                  {isOnline ? "On" : "Off"}
+                                </span>
                               </span>
                             </span>
-                            <span className="inline-flex items-center gap-1">
-                              {isOnline ? (
-                                <Cloud className="h-3 w-3" />
-                              ) : (
-                                <CloudOff className="h-3 w-3" />
-                              )}
-                              <span className="hidden lg:inline">
-                                {isOnline ? "Cloud Online" : "Offline"}
-                              </span>
-                              <span className="lg:hidden">
-                                {isOnline ? "On" : "Off"}
-                              </span>
-                            </span>
-                          </span>
-                        </button>
+                          </div>
+                        )}
 
                         <button
                           type="button"
