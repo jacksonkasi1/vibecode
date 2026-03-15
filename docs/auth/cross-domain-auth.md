@@ -52,7 +52,7 @@ app.use(
   cors({
     origin: trustedOrigins,
     credentials: true,
-  })
+  }),
 );
 ```
 
@@ -60,21 +60,21 @@ app.use(
 
 ## Environment Variables
 
-| Variable | Purpose | Example |
-|----------|---------|---------|
-| `FRONTEND_URL` | Primary frontend URL | `https://app.example.com` |
-| `ALLOWED_ORIGINS` | All trusted origins | `https://app.example.com,https://dashboard.example.com` |
-| `DOMAIN` | Cookie domain | `.example.com` |
+| Variable          | Purpose              | Example                                                 |
+| ----------------- | -------------------- | ------------------------------------------------------- |
+| `FRONTEND_URL`    | Primary frontend URL | `https://app.example.com`                               |
+| `ALLOWED_ORIGINS` | All trusted origins  | `https://app.example.com,https://dashboard.example.com` |
+| `DOMAIN`          | Cookie domain        | `.example.com`                                          |
 
 ---
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
-| `packages/auth/src/auth.ts` | Cookie domain, trusted origins |
-| `.env` | Add `ALLOWED_ORIGINS`, `DOMAIN` |
-| `apps/server/src/index.ts` | CORS configuration |
+| File                        | Change                          |
+| --------------------------- | ------------------------------- |
+| `packages/auth/src/auth.ts` | Cookie domain, trusted origins  |
+| `.env`                      | Add `ALLOWED_ORIGINS`, `DOMAIN` |
+| `apps/server/src/index.ts`  | CORS configuration              |
 
 ## References
 

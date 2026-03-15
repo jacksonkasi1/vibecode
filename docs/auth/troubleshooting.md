@@ -7,10 +7,12 @@ Common authentication issues and solutions.
 ### Problem: Redirects to backend instead of frontend after Google login
 
 **Symptoms:**
+
 - After Google OAuth, redirected to `http://localhost:8080/dashboard`
 - Should redirect to `http://localhost:5173/dashboard`
 
 **Solution:**
+
 ```tsx
 // apps/web/src/providers.tsx
 import { APP_URLS } from "@/config/urls";
@@ -28,6 +30,7 @@ import { APP_URLS } from "@/config/urls";
 ### Problem: Email/password login works, but social login doesn't
 
 **Check:**
+
 1. Is `baseURL` set in `AuthUIProvider`?
 2. Is `VITE_FRONTEND_URL` in `.env`?
 3. Are OAuth credentials correct in backend `.env`?
@@ -39,8 +42,9 @@ import { APP_URLS } from "@/config/urls";
 ### Problem: CORS errors when calling auth API
 
 **Symptoms:**
+
 ```
-Access to fetch at 'http://localhost:8080/api/auth/...' from origin 
+Access to fetch at 'http://localhost:8080/api/auth/...' from origin
 'http://localhost:5173' has been blocked by CORS policy
 ```
 
@@ -62,6 +66,7 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 ### Problem: Email verification link redirects to backend
 
 **Check:**
+
 ```ts
 // packages/auth/src/auth.ts
 const verificationUrl = buildEmailUrlWithFrontendCallback(
@@ -71,6 +76,7 @@ const verificationUrl = buildEmailUrlWithFrontendCallback(
 ```
 
 **Ensure:**
+
 - `FRONTEND_URL` is set in backend `.env`
 - `AUTH_REDIRECTS.afterEmailVerification` points to correct path
 
@@ -81,7 +87,9 @@ const verificationUrl = buildEmailUrlWithFrontendCallback(
 ### Problem: Session not persisting across requests
 
 **Check:**
+
 1. Cookie domain settings (production):
+
 ```ts
 // packages/auth/src/auth.ts
 advanced: {
@@ -92,6 +100,7 @@ advanced: {
 ```
 
 2. Secure cookies (production):
+
 ```ts
 advanced: {
   useSecureCookies: true, // ← Must be true for HTTPS
@@ -105,17 +114,20 @@ advanced: {
 ### Problem: Config not loading from .env
 
 **Check:**
+
 1. File name is exactly `.env` (not `.env.local` unless configured)
 2. Variables prefixed with `VITE_` for frontend
 3. Restart dev server after changing `.env`
 
 **Frontend (.env):**
+
 ```env
 VITE_FRONTEND_URL=http://localhost:5173  # ← Must have VITE_ prefix
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
 **Backend (.env):**
+
 ```env
 BETTER_AUTH_URL=http://localhost:8080  # ← No prefix needed
 FRONTEND_URL=http://localhost:5173
@@ -128,6 +140,7 @@ FRONTEND_URL=http://localhost:5173
 ### Problem: TypeScript errors after config changes
 
 **Solution:**
+
 ```bash
 # Clear cache and rebuild
 bun run build
