@@ -18,7 +18,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="grid grid-cols-3 items-center border-b px-4 py-2 sm:px-6">
+      <header className="grid grid-cols-3 items-center border-b px-4 py-1.5 sm:px-6">
         <div className="justify-self-start">
           <Button variant="ghost" size="icon-xs" asChild>
             <Link to="/apps" aria-label="Back to apps">
@@ -32,8 +32,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           to="/apps"
           className="justify-self-center flex items-center gap-1.5 transition-opacity hover:opacity-80"
         >
-          <VibeMark className="h-3.5 w-3.5" />
-          <span className="text-xs font-medium tracking-tight">vibe</span>
+          <VibeMark className="h-4 w-4" />
+          <span className="text-sm font-medium tracking-tight">vibe</span>
         </Link>
 
         <div className="justify-self-end flex items-center gap-1">
@@ -47,7 +47,9 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Link>
           </Button>
           <ModeToggle />
-          <UserButton size="icon" />
+          <div className="scale-90">
+            <UserButton size="icon" />
+          </div>
         </div>
       </header>
 
