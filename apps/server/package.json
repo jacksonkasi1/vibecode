@@ -1,0 +1,32 @@
+{
+  "name": "server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "build": "tsc",
+    "lint": "eslint src",
+    "format": "prettier --write .",
+    "check": "prettier --write . && eslint --fix",
+    "check-types": "tsc --noEmit",
+    "deploy:prod": "./.deploy/scripts/deploy.sh prod",
+    "deploy:beta": "./.deploy/scripts/deploy.sh beta",
+    "deploy:sandbox": "./.deploy/scripts/deploy.sh sandbox"
+  },
+  "dependencies": {
+    "@repo/auth": "workspace:*",
+    "@repo/db": "workspace:*",
+    "@repo/logs": "workspace:*",
+    "@repo/shared": "workspace:*",
+    "@repo/storage": "workspace:*",
+    "@t3-oss/env-core": "^0.13.10",
+    "hono": "^4.11.4",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/node": "^22",
+    "prettier": "^3.8.0",
+    "typescript": "^5.7.2"
+  }
+}
