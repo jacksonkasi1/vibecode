@@ -2,7 +2,7 @@
 import type { Project, Workspace } from "@repo/db";
 
 // ** import lib
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   CircleUser,
@@ -15,7 +15,9 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Square,
   Settings,
+  Trash2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,10 +26,16 @@ import { toast } from "sonner";
 // ** import apis
 import { createExecution } from "@/rest-api/executions";
 import { getModels } from "@/rest-api/models";
-import { createProject, getProjects, updateProject } from "@/rest-api/projects";
+import {
+  createProject,
+  deleteProject,
+  getProjects,
+  updateProject,
+} from "@/rest-api/projects";
 import {
   createWorkspace,
   getWorkspaces,
+  stopWorkspace,
   updateWorkspace,
 } from "@/rest-api/workspaces";
 
@@ -109,6 +117,14 @@ export default function Apps() {
   const [showContinueCustomize, setShowContinueCustomize] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
+  const [projectActionsMenu, setProjectActionsMenu] = useState<{
+    projectId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const suppressQuickOpenUntilRef = useRef(0);
 
   const createErrors = useMemo(
     () => validateResourceInputs(createInputs),
@@ -144,6 +160,35 @@ export default function Apps() {
     }
   }, [models, selectedModelId]);
 
+  useEffect(() => {
+    if (!projectActionsMenu) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      setProjectActionsMenu(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setProjectActionsMenu(null);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [projectActionsMenu]);
+
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer();
+    };
+  }, []);
+
   const SelectedModeIcon = modeIcons[selectedMode];
   const selectedModelName =
     models.find((model) => model.id === selectedModelId)?.displayName ||
@@ -176,6 +221,13 @@ export default function Apps() {
       })
       .sort((a, b) => a.project.name.localeCompare(b.project.name));
   }, [projects, latestWorkspaceByProject]);
+
+  const projectsById = useMemo(() => {
+    return projects.reduce<Record<string, Project>>((acc, project) => {
+      acc[project.id] = project;
+      return acc;
+    }, {});
+  }, [projects]);
 
   const createProjectMutation = useMutation({
     mutationFn: async () => {
@@ -308,6 +360,47 @@ export default function Apps() {
     onError: (error) => {
       toast.error(
         `Failed to rename project: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    },
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      return deleteProject(projectId);
+    },
+    onSuccess: (_response, projectId) => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+
+      if (selectedProjectId === projectId) {
+        setSelectedProjectId(null);
+      }
+
+      if (editingProjectId === projectId) {
+        setEditingProjectId(null);
+        setEditingProjectName("");
+      }
+
+      toast.success("Project deleted");
+    },
+    onError: (error) => {
+      toast.error(
+        `Failed to delete project: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    },
+  });
+
+  const stopWorkspaceMutation = useMutation({
+    mutationFn: async (workspaceId: string) => {
+      return stopWorkspace(workspaceId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      toast.success("Workspace stopping...");
+    },
+    onError: (error) => {
+      toast.error(
+        `Failed to stop workspace: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     },
   });
@@ -506,6 +599,77 @@ export default function Apps() {
       name: nextName,
     });
   };
+
+  const handleOpenProjectActionsMenu = (
+    project: Project,
+    x: number,
+    y: number,
+  ) => {
+    const menuWidth = 168;
+    const menuHeight = 132;
+    const nextX = Math.min(Math.max(8, x), window.innerWidth - menuWidth - 8);
+    const nextY = Math.min(Math.max(8, y), window.innerHeight - menuHeight - 8);
+
+    setProjectActionsMenu({
+      projectId: project.id,
+      x: nextX,
+      y: nextY,
+    });
+  };
+
+  const handleMenuRename = () => {
+    if (!projectActionsMenu) return;
+
+    const project = projectsById[projectActionsMenu.projectId];
+    if (!project) return;
+
+    setProjectActionsMenu(null);
+    handleStartEditingProject(project);
+  };
+
+  const handleMenuDelete = () => {
+    if (!projectActionsMenu) return;
+
+    const project = projectsById[projectActionsMenu.projectId];
+    if (!project) return;
+
+    setProjectActionsMenu(null);
+
+    const shouldDelete = window.confirm(`Delete \"${project.name}\" project?`);
+    if (!shouldDelete) return;
+
+    deleteProjectMutation.mutate(project.id);
+  };
+
+  const handleMenuStop = () => {
+    if (!projectActionsMenu) return;
+
+    const workspace = latestWorkspaceByProject[projectActionsMenu.projectId];
+    const canStop = workspace
+      ? ["running", "starting"].includes(workspace.status)
+      : false;
+
+    if (!workspace || !canStop) {
+      setProjectActionsMenu(null);
+      return;
+    }
+
+    setProjectActionsMenu(null);
+    stopWorkspaceMutation.mutate(workspace.id);
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current === null) return;
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  const actionsWorkspace = projectActionsMenu
+    ? latestWorkspaceByProject[projectActionsMenu.projectId]
+    : undefined;
+  const canStopActionsWorkspace = actionsWorkspace
+    ? ["running", "starting"].includes(actionsWorkspace.status)
+    : false;
 
   return (
     <ProtectedRoute>
@@ -759,7 +923,37 @@ export default function Apps() {
 
                   return (
                     <div key={project.id}>
-                      <div className="group flex items-center gap-1 px-1 py-1">
+                      <div
+                        className="group flex items-center gap-1 px-1 py-1"
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          if (isEditingProject) return;
+                          handleOpenProjectActionsMenu(
+                            project,
+                            event.clientX,
+                            event.clientY,
+                          );
+                        }}
+                        onTouchStart={(event) => {
+                          if (isEditingProject) return;
+                          const touch = event.touches[0];
+                          if (!touch) return;
+
+                          clearLongPressTimer();
+                          longPressTimerRef.current = window.setTimeout(() => {
+                            suppressQuickOpenUntilRef.current =
+                              Date.now() + 800;
+                            handleOpenProjectActionsMenu(
+                              project,
+                              touch.clientX,
+                              touch.clientY,
+                            );
+                          }, 480);
+                        }}
+                        onTouchMove={clearLongPressTimer}
+                        onTouchEnd={clearLongPressTimer}
+                        onTouchCancel={clearLongPressTimer}
+                      >
                         {isEditingProject ? (
                           <div className="flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px]">
                             <div className="min-w-0 flex flex-1 items-center gap-1.5">
@@ -830,6 +1024,12 @@ export default function Apps() {
                             role="button"
                             tabIndex={0}
                             onClick={() => {
+                              if (
+                                Date.now() < suppressQuickOpenUntilRef.current
+                              ) {
+                                return;
+                              }
+
                               if (quickContinueMutation.isPending) return;
                               quickContinueMutation.mutate(project.id);
                             }}
@@ -858,7 +1058,11 @@ export default function Apps() {
                                   event.stopPropagation();
                                   handleStartEditingProject(project);
                                 }}
-                                disabled={updateProjectMutation.isPending}
+                                disabled={
+                                  updateProjectMutation.isPending ||
+                                  deleteProjectMutation.isPending ||
+                                  stopWorkspaceMutation.isPending
+                                }
                                 className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-all hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                                 aria-label={`Rename ${project.name}`}
                               >
@@ -954,6 +1158,68 @@ export default function Apps() {
                 })
               )}
             </div>
+
+            {projectActionsMenu ? (
+              <div
+                className="fixed inset-0 z-50"
+                onContextMenu={(event) => event.preventDefault()}
+              >
+                <div
+                  ref={menuRef}
+                  className="absolute min-w-[160px] rounded-md border border-border bg-popover p-1 shadow-md"
+                  style={{
+                    left: projectActionsMenu.x,
+                    top: projectActionsMenu.y,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleMenuRename}
+                    disabled={
+                      updateProjectMutation.isPending ||
+                      deleteProjectMutation.isPending ||
+                      stopWorkspaceMutation.isPending
+                    }
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleMenuStop}
+                    disabled={
+                      !canStopActionsWorkspace ||
+                      stopWorkspaceMutation.isPending
+                    }
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {stopWorkspaceMutation.isPending ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Square className="h-3 w-3" />
+                    )}
+                    Stop
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleMenuDelete}
+                    disabled={
+                      deleteProjectMutation.isPending ||
+                      stopWorkspaceMutation.isPending
+                    }
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {deleteProjectMutation.isPending ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </main>
         </div>
       </div>
