@@ -257,7 +257,7 @@ export default function AIModelSettings() {
             <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label={`Configure ${name}`}
               >
                 <Settings className="h-3.5 w-3.5" />
@@ -324,7 +324,7 @@ export default function AIModelSettings() {
                 <CollapsibleTrigger asChild>
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/50"
+                    className="flex w-full cursor-pointer items-center justify-between px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/50"
                   >
                     <span>Developer Settings</span>
                     <ChevronDown

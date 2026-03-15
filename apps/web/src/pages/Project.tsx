@@ -54,9 +54,11 @@ export default function Project() {
   const params = useParams();
   const queryClient = useQueryClient();
   const projectId = params.id ?? "1";
-  
+
   const [isAssistantPanelOpen, setIsAssistantPanelOpen] = useState(true);
-  const [localProjectName, setLocalProjectName] = useState(`Project #${projectId}`);
+  const [localProjectName, setLocalProjectName] = useState(
+    `Project #${projectId}`,
+  );
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
 
   const { data: projectResponse, isLoading } = useQuery({
@@ -74,7 +76,8 @@ export default function Project() {
   }, [project?.name, isEditingProjectName]);
 
   const updateProjectMutation = useMutation({
-    mutationFn: (newName: string) => updateProject(projectId, { name: newName }),
+    mutationFn: (newName: string) =>
+      updateProject(projectId, { name: newName }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -144,7 +147,9 @@ export default function Project() {
                 {isEditingProjectName ? (
                   <input
                     value={localProjectName}
-                    onChange={(event) => setLocalProjectName(event.target.value)}
+                    onChange={(event) =>
+                      setLocalProjectName(event.target.value)
+                    }
                     onBlur={finishProjectNameEdit}
                     onKeyDown={handleProjectNameKeyDown}
                     maxLength={40}
@@ -161,7 +166,7 @@ export default function Project() {
                     <button
                       type="button"
                       onClick={() => setIsEditingProjectName(true)}
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                      className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
                       aria-label="Edit project name"
                     >
                       <Pencil className="h-3 w-3" />
@@ -183,7 +188,7 @@ export default function Project() {
                 <button
                   type="button"
                   onClick={() => setIsAssistantPanelOpen((prev) => !prev)}
-                  className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  className="mr-1 inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
                   aria-label={
                     isAssistantPanelOpen
                       ? "Close assistant panel"
@@ -194,20 +199,20 @@ export default function Project() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-7 items-center justify-center rounded-md bg-secondary/80 px-2.5 text-xs font-medium text-foreground transition-colors"
+                  className="inline-flex h-7 cursor-pointer items-center justify-center rounded-md bg-secondary/80 px-2.5 text-xs font-medium text-foreground transition-colors"
                 >
                   App
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-7 items-center justify-center rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  className="inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
                 >
                   Code
                 </button>
                 <div className="mx-1 h-3.5 w-px bg-border"></div>
                 <button
                   type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
@@ -229,7 +234,7 @@ export default function Project() {
                 <div className="mx-1 h-3.5 w-px bg-border"></div>
                 <button
                   type="button"
-                  className="inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  className="inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
                 >
                   <Globe className="h-3.5 w-3.5" /> Deploy
                 </button>
@@ -254,7 +259,7 @@ export default function Project() {
                 <button
                   type="button"
                   onClick={() => setIsAssistantPanelOpen((prev) => !prev)}
-                  className="relative inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  className="relative inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
                   aria-label={
                     isAssistantPanelOpen
                       ? "Close assistant panel"
@@ -327,7 +332,7 @@ export default function Project() {
                       <button
                         key={name}
                         className={[
-                          "flex w-full items-center rounded-sm px-2 py-0.5 text-left text-[11px]",
+                          "flex w-full cursor-pointer items-center rounded-sm px-2 py-0.5 text-left text-[11px]",
                           isSelected
                             ? "bg-secondary text-foreground"
                             : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors",
@@ -390,7 +395,7 @@ export default function Project() {
                 </div>
                 <button
                   type="button"
-                  className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors"
+                  className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <ChevronRight className="h-3 w-3 rotate-90" />
                 </button>

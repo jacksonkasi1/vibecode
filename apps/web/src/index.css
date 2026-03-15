@@ -167,6 +167,14 @@ body {
   textarea {
     @apply focus-visible:outline-none;
   }
+
+  button {
+    @apply cursor-pointer;
+  }
+
+  button:disabled {
+    @apply cursor-not-allowed;
+  }
 }
 
 @layer utilities {

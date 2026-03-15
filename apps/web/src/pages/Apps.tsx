@@ -44,19 +44,20 @@ export default function Apps() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [selectedMode, setSelectedMode] = useState<(typeof modeOptions)[number]>(
-    modeOptions[0]
-  );
-  const [selectedModel, setSelectedModel] = useState<string>("Loading models...");
+  const [selectedMode, setSelectedMode] = useState<
+    (typeof modeOptions)[number]
+  >(modeOptions[0]);
+  const [selectedModel, setSelectedModel] =
+    useState<string>("Loading models...");
 
   // Fetch Models
   const { data: modelsData } = useQuery({
     queryKey: ["models"],
     queryFn: () => getModels(),
   });
-  
+
   const models = modelsData?.data || [];
-  
+
   // Set default model when fetched
   if (models.length > 0 && selectedModel === "Loading models...") {
     setSelectedModel(models[0].displayName);
@@ -67,12 +68,16 @@ export default function Apps() {
     queryKey: ["projects"],
     queryFn: () => getProjects(),
   });
-  
+
   const projects = projectsData?.data || [];
 
   // Create Project Mutation
   const createProjectMutation = useMutation({
-    mutationFn: () => createProject({ name: "Untitled Project", description: "A new fresh project workspace" }),
+    mutationFn: () =>
+      createProject({
+        name: "Untitled Project",
+        description: "A new fresh project workspace",
+      }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       // Navigate to the new project view
@@ -125,7 +130,7 @@ export default function Apps() {
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex h-6 items-center gap-1 rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                         >
                           <SelectedModeIcon className="size-3" />
                           {selectedMode}
@@ -156,7 +161,7 @@ export default function Apps() {
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex h-6 items-center gap-1.5 rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          className="inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                         >
                           ✦ {selectedModel}
                         </button>
@@ -174,7 +179,9 @@ export default function Apps() {
                             <DropdownMenuItem
                               className="px-2 py-1 text-[11px]"
                               key={model.id}
-                              onClick={() => setSelectedModel(model.displayName)}
+                              onClick={() =>
+                                setSelectedModel(model.displayName)
+                              }
                             >
                               {model.displayName}
                             </DropdownMenuItem>
@@ -184,13 +191,13 @@ export default function Apps() {
                     </DropdownMenu>
                     <button
                       type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border/50 bg-background/50 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border border-border/50 bg-background/50 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
                     <button
                       type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border/50 bg-background/50 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border border-border/50 bg-background/50 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
                       <Grid2X2 className="h-3 w-3" />
                     </button>
@@ -198,7 +205,7 @@ export default function Apps() {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
                       <Paperclip className="h-3 w-3" />
                     </button>
@@ -218,9 +225,11 @@ export default function Apps() {
                 type="button"
                 onClick={() => createProjectMutation.mutate()}
                 disabled={createProjectMutation.isPending}
-                className="rounded-md border border-border/50 bg-background/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                className="cursor-pointer rounded-md border border-border/50 bg-background/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {createProjectMutation.isPending ? "Creating..." : "Create Blank Project"}
+                {createProjectMutation.isPending
+                  ? "Creating..."
+                  : "Create Blank Project"}
               </button>
             </div>
 
@@ -230,7 +239,7 @@ export default function Apps() {
               </h2>
               <button
                 type="button"
-                className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                className="cursor-pointer text-[11px] text-muted-foreground transition-colors hover:text-foreground"
               >
                 View all
               </button>
@@ -238,9 +247,13 @@ export default function Apps() {
 
             <div className="space-y-0.5">
               {parsingProjects ? (
-                <div className="px-2 py-1.5 text-[13px] text-muted-foreground">Loading projects...</div>
+                <div className="px-2 py-1.5 text-[13px] text-muted-foreground">
+                  Loading projects...
+                </div>
               ) : projects.length === 0 ? (
-                <div className="px-2 py-1.5 text-[13px] text-muted-foreground">No projects found. Create one to get started!</div>
+                <div className="px-2 py-1.5 text-[13px] text-muted-foreground">
+                  No projects found. Create one to get started!
+                </div>
               ) : (
                 projects.map((project) => (
                   <Link
@@ -248,7 +261,9 @@ export default function Apps() {
                     to={`/projects/${project.id}`}
                     className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] hover:bg-secondary/50 group"
                   >
-                    <span className="text-foreground/90 font-medium group-hover:text-foreground transition-colors">{project.name}</span>
+                    <span className="text-foreground/90 font-medium group-hover:text-foreground transition-colors">
+                      {project.name}
+                    </span>
                     <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                       <Cloud className="h-3 w-3" />
                       Cloud
