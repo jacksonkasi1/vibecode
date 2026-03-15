@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 // ** import lib
 import { AuthUIProvider } from "@daveyplate/better-auth-ui";
 import { useNavigate, Link } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -34,14 +35,17 @@ interface ProvidersProps {
   children: ReactNode;
 }
 
+const queryClient = new QueryClient();
+
 export function Providers({ children }: ProvidersProps) {
   const navigate = useNavigate();
 
   return (
     <ThemeProvider defaultTheme="light" storageKey="flowstack-ui-theme">
-      <AuthUIProvider
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        authClient={authClient as any}
+      <QueryClientProvider client={queryClient}>
+        <AuthUIProvider
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          authClient={authClient as any}
         baseURL={APP_URLS.frontend}
         navigate={navigate}
         Link={LinkWrapper}
@@ -57,9 +61,10 @@ export function Providers({ children }: ProvidersProps) {
           delete: deleteAvatar,
         }}
       >
-        {children}
-        <Toaster />
-      </AuthUIProvider>
+          {children}
+          <Toaster />
+        </AuthUIProvider>
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }
