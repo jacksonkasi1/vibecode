@@ -58,18 +58,7 @@ Build the foundation and one reliable coding agent.
 
 #### Workspace runtime
 
-- [ ] Start isolated VM per project/session (Google Cloud Compute Engine)
-- [ ] Use prebuilt custom machine images (Ubuntu + Node + Bun)
-- [ ] Allow user-configurable hardware sizing (e.g., standard vs. pro)
-- [ ] **Implement "Zero-Latency" Sandboxing (Linux User Isolation):**
-  - [ ] Run Worker as admin user, create a restricted Linux user (`workspace-user`)
-  - [ ] Create restricted jail (`chroot`) for agent workspace 
-  - [ ] Intercept AI shell commands and force execution via `sudo -u workspace-user`
-- [ ] Pull code from **GitHub**
-- [ ] Run install/start commands
-- [ ] Stop VM on idle
-- [ ] Resume VM later
-- [ ] Save workspace metadata
+- [ ] Execute tasks safely within local isolated folders
 
 #### Models
 
@@ -94,9 +83,41 @@ Build the foundation and one reliable coding agent.
 
 ---
 
-### Next
+### Phase 1.2: Cloud Infrastructure & Security (GCP)
 
-Polish the core and make it stable.
+Move the execution environment from simple local processes to secure, scalable Google Cloud Compute Engine VMs with dual-mode support for local development.
+
+#### Dual-Mode Architecture
+- [ ] Keep existing local DB Poller loop (`poller.ts`) for local development
+- [ ] Add Google Cloud Pub/Sub listener for production environment
+- [ ] Create environment toggle: local DB polling vs production Pub/Sub
+
+#### Cloud VM Orchestration (Server)
+- [ ] Integrate `@google-cloud/compute` SDK in `apps/server`
+- [ ] Build API to dynamically spawn Compute Engine VMs (scale to zero)
+- [ ] Map instance sizing endpoints (Standard `e2-medium`, Pro `e2-standard-4`)
+- [ ] Create VM Startup Script (Bash) that:
+  - [ ] Pulls the VIBECode Worker repo/image
+  - [ ] Injects `EXECUTION_ID` and `DATABASE_URL` 
+  - [ ] Auto-shuts down (`sudo poweroff`) when execution completes
+- [ ] Build custom VM Machine Image (pre-installed Ubuntu, Node v20, Bun v1.2, Python)
+
+#### Zero-Latency Sandboxing (Worker)
+- [ ] Set up strict Linux User Permissions on the Worker VM
+  - [ ] `vibecode-admin`: Runs the Node app, owns `.env`, restricted access (`chmod 700`)
+  - [ ] `workspace-user`: Unprivileged user for AI code execution
+- [ ] Refactor `execute_command` tool to run via `sudo -u workspace-user -- bash -c`
+- [ ] Create restricted filesystem jail (`chroot`) mapping to GitHub repo
+
+#### Workspace State Management
+- [ ] Auto-pull target user code from GitHub on VM boot
+- [ ] Upload final artifacts and diffs to Cloudflare R2 on completion
+- [ ] Gracefully pause/stop VMs on user command (save persistent disk)
+- [ ] Resume VM from paused state
+
+---
+
+### Phase 2: Polish the core and make it stable.
 
 #### DX and quality
 
