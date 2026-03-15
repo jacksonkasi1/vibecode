@@ -8,12 +8,12 @@ Build the foundation and one reliable coding agent.
 
 #### Product
 
-- [ ] Set up monorepo with **Bun + Turborepo + TypeScript**
-- [ ] Create `apps/web`
-- [ ] Create `apps/server`
-- [ ] Create `apps/worker`
-- [ ] Create `packages/shared`
-- [ ] Add shared `tsconfig`, linting, formatting, path aliases
+- [x] Set up monorepo with **Bun + Turborepo + TypeScript**
+- [x] Create `apps/web`
+- [x] Create `apps/server`
+- [x] Create `apps/worker`
+- [x] Create `packages/shared`
+- [x] Add shared `tsconfig`, linting, formatting, path aliases
 
 #### Web
 
@@ -30,35 +30,41 @@ Build the foundation and one reliable coding agent.
 
 #### Server
 
-- [ ] Set up **Hono**
-- [ ] Add **Zod** validation
-- [ ] Create routes for:
-  - [ ] projects
-  - [ ] workspaces
-  - [ ] executions/tasks
-  - [ ] models/providers
-  - [ ] artifacts
+- [x] Set up **Hono**
+- [x] Add **Zod** validation
+- [x] Create routes for:
+  - [x] projects
+  - [x] workspaces
+  - [x] executions/tasks
+  - [x] models/providers
+  - [x] artifacts
 
-- [ ] Add health check route
-- [ ] Add SSE or WebSocket streaming
+- [x] Add health check route
+- [x] Add SSE or WebSocket streaming
 
 #### Worker
 
-- [ ] Build execution runtime
-- [ ] Add one **single coding agent**
-- [ ] Add tools for:
-  - [ ] file read/write
-  - [ ] shell command execution
+- [x] Build execution runtime
+- [x] Add one **single coding agent**
+- [x] Add tools for:
+  - [x] file read/write
+  - [x] shell command execution
   - [ ] repo search
   - [ ] git actions
-  - [ ] artifact saving
+  - [x] artifact saving
 
-- [ ] Add structured logs/events
-- [ ] Add failure/retry handling
+- [x] Add structured logs/events
+- [x] Add failure/retry handling
 
 #### Workspace runtime
 
-- [ ] Start isolated VM per project/session
+- [ ] Start isolated VM per project/session (Google Cloud Compute Engine)
+- [ ] Use prebuilt custom machine images (Ubuntu + Node + Bun)
+- [ ] Allow user-configurable hardware sizing (e.g., standard vs. pro)
+- [ ] **Implement "Zero-Latency" Sandboxing (Linux User Isolation):**
+  - [ ] Run Worker as admin user, create a restricted Linux user (`workspace-user`)
+  - [ ] Create restricted jail (`chroot`) for agent workspace 
+  - [ ] Intercept AI shell commands and force execution via `sudo -u workspace-user`
 - [ ] Pull code from **GitHub**
 - [ ] Run install/start commands
 - [ ] Stop VM on idle
@@ -67,10 +73,10 @@ Build the foundation and one reliable coding agent.
 
 #### Models
 
-- [ ] Add **Gemini API** integration first
-- [ ] Add provider abstraction
+- [x] Add **Gemini API** integration first
+- [x] Add provider abstraction
 - [ ] Add optional **Vertex AI** support later
-- [ ] Keep model config centralized
+- [x] Keep model config centralized
 - [ ] Add these initial models:
   - [ ] `gemini-3.1-pro-preview`
   - [ ] `gemini-3-flash-preview`
