@@ -10,7 +10,7 @@ import {
   type ThreadMessage,
   type TextMessagePart,
 } from "@assistant-ui/react";
-import { ArrowUp, Paperclip } from "lucide-react";
+import { ArrowUp, Compass, Infinity, Paperclip } from "lucide-react";
 
 // ** import components
 import {
@@ -31,6 +31,10 @@ const modelOptions = [
 ] as const;
 
 const modeOptions = ["Agent", "Plan"] as const;
+const modeIcons = {
+  Agent: Infinity,
+  Plan: Compass,
+} as const;
 
 function extractText(message: ThreadMessage): string {
   if (typeof message.content === "string") return message.content;
@@ -76,8 +80,11 @@ function AssistantMessage() {
 }
 
 export function VibeAssistantThread() {
-  const [selectedMode, setSelectedMode] = useState<string>(modeOptions[0]);
+  const [selectedMode, setSelectedMode] = useState<
+    (typeof modeOptions)[number]
+  >(modeOptions[0]);
   const [selectedModel, setSelectedModel] = useState<string>(modelOptions[0]);
+  const SelectedModeIcon = modeIcons[selectedMode];
 
   // Note: To support LangGraph or LangChain in the backend later,
   // replace `useLocalRuntime` with `useEdgeRuntime({ api: "/api/chat" })`
@@ -134,17 +141,27 @@ export function VibeAssistantThread() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="inline-flex h-6 items-center rounded-full border border-border bg-background px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      className="inline-flex h-6 items-center gap-1 rounded-full border border-border bg-background px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
+                      <SelectedModeIcon className="size-3" />
                       {selectedMode}
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-28">
+                  <DropdownMenuContent
+                    align="start"
+                    className="w-28 text-[11px]"
+                  >
                     {modeOptions.map((option) => (
                       <DropdownMenuItem
+                        className="px-2 py-1 text-[11px]"
                         key={option}
                         onClick={() => setSelectedMode(option)}
                       >
+                        {option === "Agent" ? (
+                          <Infinity className="size-3" />
+                        ) : (
+                          <Compass className="size-3" />
+                        )}
                         {option}
                       </DropdownMenuItem>
                     ))}
@@ -160,9 +177,13 @@ export function VibeAssistantThread() {
                       ✦ {selectedModel}
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuContent
+                    align="start"
+                    className="w-56 text-[11px]"
+                  >
                     {modelOptions.map((model) => (
                       <DropdownMenuItem
+                        className="px-2 py-1 text-[11px]"
                         key={model}
                         onClick={() => setSelectedModel(model)}
                       >
