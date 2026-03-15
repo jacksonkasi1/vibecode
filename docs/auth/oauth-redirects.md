@@ -57,12 +57,12 @@ const redirectTo = AUTH_REDIRECTS.afterLogin;
 
 ## Key Points
 
-| Setting | Value | Example |
-|---------|-------|---------|
-| `APP_URLS.frontend` | Frontend URL | `http://localhost:5173` |
-| `APP_URLS.api` | Backend API URL | `http://localhost:8080` |
-| `baseURL` in AuthUIProvider | Use `APP_URLS.frontend` | For OAuth callbacks |
-| `redirectTo` prop | Use `AUTH_REDIRECTS` | `AUTH_REDIRECTS.afterLogin` |
+| Setting                     | Value                   | Example                     |
+| --------------------------- | ----------------------- | --------------------------- |
+| `APP_URLS.frontend`         | Frontend URL            | `http://localhost:5173`     |
+| `APP_URLS.api`              | Backend API URL         | `http://localhost:8080`     |
+| `baseURL` in AuthUIProvider | Use `APP_URLS.frontend` | For OAuth callbacks         |
+| `redirectTo` prop           | Use `AUTH_REDIRECTS`    | `AUTH_REDIRECTS.afterLogin` |
 
 ## Environment Variables
 
@@ -77,30 +77,35 @@ VITE_API_BASE_URL=http://localhost:8080
 ## Files to Modify
 
 ### Configuration Files
+
 - `apps/web/src/config/urls.ts` - Define frontend/API URLs
 - `apps/web/src/config/redirects.ts` - Define redirect paths
 
 ### Backend
+
 - `packages/auth/src/config/redirects.ts` - Define redirect paths
 
 ### Frontend
+
 - `apps/web/src/providers.tsx` - Use `APP_URLS.frontend` for `baseURL`
 - `apps/web/src/pages/auth/AuthPage.tsx` - Use `AUTH_REDIRECTS`
 
 ## Common Mistakes
 
 ❌ **Wrong**: Hardcoding URLs
+
 ```tsx
 const frontendBaseURL = window.location.origin;
 const redirectTo = "/dashboard";
 ```
 
 ✅ **Correct**: Using centralized configs
+
 ```tsx
 import { APP_URLS } from "@/config/urls";
 import { AUTH_REDIRECTS } from "@/config/redirects";
 
-<AuthUIProvider baseURL={APP_URLS.frontend} />
+<AuthUIProvider baseURL={APP_URLS.frontend} />;
 const redirectTo = AUTH_REDIRECTS.afterLogin;
 ```
 

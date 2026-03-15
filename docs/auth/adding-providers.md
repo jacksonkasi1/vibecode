@@ -4,11 +4,11 @@ Quick guide to add new social login providers (GitHub, Discord, Twitter, etc.).
 
 ## Files to Modify
 
-| # | File | Change |
-|---|------|--------|
-| 1 | `packages/auth/src/auth.ts` | Add provider config |
-| 2 | `.env` | Add client ID & secret |
-| 3 | `apps/*/src/providers.tsx` | Enable in UI |
+| #   | File                        | Change                 |
+| --- | --------------------------- | ---------------------- |
+| 1   | `packages/auth/src/auth.ts` | Add provider config    |
+| 2   | `.env`                      | Add client ID & secret |
+| 3   | `apps/*/src/providers.tsx`  | Enable in UI           |
 
 ---
 
@@ -71,13 +71,13 @@ Update `apps/web/src/providers.tsx`:
 
 ## Available Providers
 
-| Provider | ID | Docs |
-|----------|-----|------|
-| Google | `google` | [Docs](https://www.better-auth.com/docs/authentication/social#google) |
-| GitHub | `github` | [Docs](https://www.better-auth.com/docs/authentication/social#github) |
-| Discord | `discord` | [Docs](https://www.better-auth.com/docs/authentication/social#discord) |
-| Twitter | `twitter` | [Docs](https://www.better-auth.com/docs/authentication/social#twitter) |
-| Apple | `apple` | [Docs](https://www.better-auth.com/docs/authentication/social#apple) |
+| Provider | ID        | Docs                                                                   |
+| -------- | --------- | ---------------------------------------------------------------------- |
+| Google   | `google`  | [Docs](https://www.better-auth.com/docs/authentication/social#google)  |
+| GitHub   | `github`  | [Docs](https://www.better-auth.com/docs/authentication/social#github)  |
+| Discord  | `discord` | [Docs](https://www.better-auth.com/docs/authentication/social#discord) |
+| Twitter  | `twitter` | [Docs](https://www.better-auth.com/docs/authentication/social#twitter) |
+| Apple    | `apple`   | [Docs](https://www.better-auth.com/docs/authentication/social#apple)   |
 
 ## References
 
