@@ -1,0 +1,55 @@
+# Dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# Build
+dist
+build
+.next
+.output
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.prod
+.env.beta
+.env.sandbox
+
+# GCP Service Account
+gcp-service-account.json
+apps/server/gcp-service-account.json
+
+# Keep .deploy folder structure but ignore generated files
+!apps/server/.deploy/
+!apps/server/.deploy/scripts/
+!apps/server/.deploy/deploy.config.yaml
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Turbo
+.turbo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# TypeScript build cache
+*.tsbuildinfo
+
+.sisyphus
