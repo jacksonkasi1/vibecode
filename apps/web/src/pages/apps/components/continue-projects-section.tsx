@@ -7,6 +7,7 @@ import type {
   WorkspacePreset,
   WorkspaceResources,
 } from "@/lib/workspace-config";
+import type { RecentProjectItem } from "@/pages/apps/types";
 
 // ** import core packages
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -18,13 +19,18 @@ import { deleteProject, updateProject } from "@/rest-api/projects";
 import { stopWorkspace } from "@/rest-api/workspaces";
 
 // ** import components
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ProjectActionsMenu } from "@/pages/apps/components/project-actions-menu";
 import { ProjectRow } from "@/pages/apps/components/project-row";
-
-type RecentProjectItem = {
-  project: Project;
-  workspace?: Workspace;
-};
 
 type ContinueProjectsSectionProps = {
   recentProjects: RecentProjectItem[];
@@ -73,6 +79,9 @@ export function ContinueProjectsSection({
     x: number;
     y: number;
   } | null>(null);
+  const [deleteConfirmProjectId, setDeleteConfirmProjectId] = useState<
+    string | null
+  >(null);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
@@ -158,6 +167,7 @@ export function ContinueProjectsSection({
     onSuccess: (_response, projectId) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      setDeleteConfirmProjectId(null);
 
       if (selectedProjectId === projectId) {
         onContinueCancel();
@@ -276,11 +286,12 @@ export function ContinueProjectsSection({
     if (!project) return;
 
     setProjectActionsMenu(null);
+    setDeleteConfirmProjectId(project.id);
+  };
 
-    const shouldDelete = window.confirm(`Delete "${project.name}" project?`);
-    if (!shouldDelete) return;
-
-    deleteProjectMutation.mutate(project.id);
+  const handleConfirmDelete = () => {
+    if (!deleteConfirmProjectId) return;
+    deleteProjectMutation.mutate(deleteConfirmProjectId);
   };
 
   const canStopActionsWorkspace = (() => {
@@ -290,6 +301,10 @@ export function ContinueProjectsSection({
       ? ["running", "starting"].includes(workspace.status)
       : false;
   })();
+
+  const deleteConfirmProject = deleteConfirmProjectId
+    ? projectsById[deleteConfirmProjectId]
+    : undefined;
 
   return (
     <>
@@ -402,6 +417,40 @@ export function ContinueProjectsSection({
         onStop={handleMenuStop}
         onDelete={handleMenuDelete}
       />
+
+      <AlertDialog
+        open={Boolean(deleteConfirmProjectId)}
+        onOpenChange={(open) => {
+          if (!open && !deleteProjectMutation.isPending) {
+            setDeleteConfirmProjectId(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteConfirmProject
+                ? `Delete "${deleteConfirmProject.name}" permanently.`
+                : "Delete this project permanently."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setDeleteConfirmProjectId(null)}
+              disabled={deleteProjectMutation.isPending}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleteProjectMutation.isPending}
+            >
+              {deleteProjectMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
