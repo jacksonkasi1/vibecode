@@ -2,6 +2,8 @@
 import { useState } from "react";
 import {
   ArrowUp,
+  Infinity,
+  Compass,
   CircleUser,
   Cloud,
   Grid2X2,
@@ -30,6 +32,10 @@ const projects = [
 ];
 
 const modeOptions = ["Agent", "Plan"] as const;
+const modeIcons = {
+  Agent: Infinity,
+  Plan: Compass,
+} as const;
 
 const modelOptions = [
   "Gemini 3.1 Pro Preview",
@@ -38,8 +44,11 @@ const modelOptions = [
 ] as const;
 
 export default function Apps() {
-  const [selectedMode, setSelectedMode] = useState<string>(modeOptions[0]);
+  const [selectedMode, setSelectedMode] = useState<
+    (typeof modeOptions)[number]
+  >(modeOptions[0]);
   const [selectedModel, setSelectedModel] = useState<string>(modelOptions[0]);
+  const SelectedModeIcon = modeIcons[selectedMode];
 
   return (
     <ProtectedRoute>
@@ -82,20 +91,27 @@ export default function Apps() {
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex h-6 items-center rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          className="inline-flex h-6 items-center gap-1 rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                         >
+                          <SelectedModeIcon className="size-3" />
                           {selectedMode}
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
                         align="start"
-                        className="w-32 text-[13px]"
+                        className="w-32 text-[11px]"
                       >
                         {modeOptions.map((option) => (
                           <DropdownMenuItem
+                            className="px-2 py-1 text-[11px]"
                             key={option}
                             onClick={() => setSelectedMode(option)}
                           >
+                            {option === "Agent" ? (
+                              <Infinity className="size-3" />
+                            ) : (
+                              <Compass className="size-3" />
+                            )}
                             {option}
                           </DropdownMenuItem>
                         ))}
@@ -113,10 +129,11 @@ export default function Apps() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
                         align="start"
-                        className="w-56 text-[13px]"
+                        className="w-56 text-[11px]"
                       >
                         {modelOptions.map((model) => (
                           <DropdownMenuItem
+                            className="px-2 py-1 text-[11px]"
                             key={model}
                             onClick={() => setSelectedModel(model)}
                           >
