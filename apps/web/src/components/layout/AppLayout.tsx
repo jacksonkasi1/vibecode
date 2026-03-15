@@ -16,7 +16,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between border-b px-6 py-4">
-        <Link to="/dashboard">
+        <Link to="/apps">
           <h1 className="text-xl font-semibold hover:opacity-80 transition-opacity">
             FlowStack
           </h1>
