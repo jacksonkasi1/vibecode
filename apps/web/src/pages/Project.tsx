@@ -14,8 +14,12 @@ import {
   RotateCw,
   UserPlus,
 } from "lucide-react";
-import { useState, type KeyboardEvent } from "react";
+import { useState, useEffect, type KeyboardEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+// ** import rest-api
+import { getProject, updateProject } from "@/rest-api/projects";
 
 // ** import components
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -48,14 +52,42 @@ const editorCode = [
 
 export default function Project() {
   const params = useParams();
+  const queryClient = useQueryClient();
   const projectId = params.id ?? "1";
+  
   const [isAssistantPanelOpen, setIsAssistantPanelOpen] = useState(true);
-  const [projectName, setProjectName] = useState(`Project #${projectId}`);
+  const [localProjectName, setLocalProjectName] = useState(`Project #${projectId}`);
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
 
+  const { data: projectResponse, isLoading } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => getProject(projectId),
+  });
+
+  const project = projectResponse?.data;
+
+  // Sync state if backend loaded
+  useEffect(() => {
+    if (project?.name && !isEditingProjectName) {
+      setLocalProjectName(project.name);
+    }
+  }, [project?.name, isEditingProjectName]);
+
+  const updateProjectMutation = useMutation({
+    mutationFn: (newName: string) => updateProject(projectId, { name: newName }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
   const finishProjectNameEdit = () => {
-    const trimmed = projectName.trim();
-    setProjectName(trimmed.length > 0 ? trimmed : `Project #${projectId}`);
+    const trimmed = localProjectName.trim();
+    if (trimmed.length > 0 && trimmed !== project?.name) {
+      updateProjectMutation.mutate(trimmed);
+    } else {
+      setLocalProjectName(project?.name || `Project #${projectId}`);
+    }
     setIsEditingProjectName(false);
   };
 
@@ -66,10 +98,20 @@ export default function Project() {
     }
 
     if (event.key === "Escape") {
-      setProjectName((prev) => prev.trim() || `Project #${projectId}`);
+      setLocalProjectName(project?.name || `Project #${projectId}`);
       setIsEditingProjectName(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <ProtectedRoute>
+        <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">
+          Loading project...
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
@@ -101,19 +143,20 @@ export default function Project() {
                 </Link>
                 {isEditingProjectName ? (
                   <input
-                    value={projectName}
-                    onChange={(event) => setProjectName(event.target.value)}
+                    value={localProjectName}
+                    onChange={(event) => setLocalProjectName(event.target.value)}
                     onBlur={finishProjectNameEdit}
                     onKeyDown={handleProjectNameKeyDown}
                     maxLength={40}
                     autoFocus
-                    className="h-6 w-36 rounded-sm border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none"
+                    disabled={updateProjectMutation.isPending}
+                    className="h-6 w-36 rounded-sm border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none disabled:opacity-50"
                     aria-label="Edit project name"
                   />
                 ) : (
                   <div className="flex items-center gap-1">
                     <span className="max-w-[132px] truncate text-xs font-medium">
-                      {projectName}
+                      {project?.name || localProjectName}
                     </span>
                     <button
                       type="button"
