@@ -9,10 +9,12 @@ import {
   Monitor,
   MoreHorizontal,
   PanelLeft,
+  Pencil,
   Plus,
   RotateCw,
   UserPlus,
 } from "lucide-react";
+import { useState, type KeyboardEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 
 // ** import components
@@ -47,13 +49,49 @@ const editorCode = [
 export default function Project() {
   const params = useParams();
   const projectId = params.id ?? "1";
+  const [isAssistantPanelOpen, setIsAssistantPanelOpen] = useState(true);
+  const [projectName, setProjectName] = useState(`Project #${projectId}`);
+  const [isEditingProjectName, setIsEditingProjectName] = useState(false);
+
+  const finishProjectNameEdit = () => {
+    const trimmed = projectName.trim();
+    setProjectName(trimmed.length > 0 ? trimmed : `Project #${projectId}`);
+    setIsEditingProjectName(false);
+  };
+
+  const handleProjectNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      finishProjectNameEdit();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setProjectName((prev) => prev.trim() || `Project #${projectId}`);
+      setIsEditingProjectName(false);
+    }
+  };
 
   return (
     <ProtectedRoute>
       <div className="h-[100dvh] overflow-hidden bg-background text-foreground">
         <div className="flex h-full">
-          <aside className="hidden h-full w-[376px] min-w-[376px] flex-col border-r border-border bg-[hsl(var(--vibe-panel-2))] md:flex">
-            <div className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-[hsl(var(--vibe-panel-2))] px-2">
+          <aside
+            className={[
+              "hidden h-full shrink-0 flex-col overflow-hidden bg-[hsl(var(--vibe-panel-2))] transition-[width,min-width,opacity,border-color] duration-200 ease-out md:flex",
+              isAssistantPanelOpen
+                ? "w-[376px] min-w-[376px] border-r border-border opacity-100"
+                : "w-0 min-w-0 border-r border-transparent opacity-0 pointer-events-none",
+            ].join(" ")}
+            aria-hidden={!isAssistantPanelOpen}
+          >
+            <div
+              className={[
+                "flex h-10 shrink-0 w-[376px] items-center justify-between border-b bg-[hsl(var(--vibe-panel-2))] px-2 transition-opacity duration-150",
+                isAssistantPanelOpen
+                  ? "border-border opacity-100"
+                  : "border-transparent opacity-0",
+              ].join(" ")}
+            >
               <div className="flex items-center gap-1.5">
                 <Link
                   to="/apps"
@@ -61,19 +99,56 @@ export default function Project() {
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                 </Link>
-                <span className="text-xs font-medium">
-                  Project #{projectId}
-                </span>
+                {isEditingProjectName ? (
+                  <input
+                    value={projectName}
+                    onChange={(event) => setProjectName(event.target.value)}
+                    onBlur={finishProjectNameEdit}
+                    onKeyDown={handleProjectNameKeyDown}
+                    maxLength={40}
+                    autoFocus
+                    className="h-6 w-36 rounded-sm border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none"
+                    aria-label="Edit project name"
+                  />
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span className="max-w-[132px] truncate text-xs font-medium">
+                      {projectName}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProjectName(true)}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                      aria-label="Edit project name"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
               </div>
               <ModeToggle />
             </div>
 
-            <VibeAssistantThread />
+            <div className="w-[376px] flex-1">
+              <VibeAssistantThread />
+            </div>
           </aside>
 
           <section className="relative flex h-full min-w-0 flex-1 flex-col bg-[hsl(var(--vibe-workspace))]">
             <div className="flex h-10 items-center justify-between border-b border-border bg-[hsl(var(--vibe-panel-2))] px-2">
               <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAssistantPanelOpen((prev) => !prev)}
+                  className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  aria-label={
+                    isAssistantPanelOpen
+                      ? "Close assistant panel"
+                      : "Open assistant panel"
+                  }
+                >
+                  <PanelLeft className="h-3.5 w-3.5" />
+                </button>
                 <button
                   type="button"
                   className="inline-flex h-7 items-center justify-center rounded-md bg-secondary/80 px-2.5 text-xs font-medium text-foreground transition-colors"
@@ -135,12 +210,20 @@ export default function Project() {
               <div className="flex w-full items-center gap-0.5">
                 <button
                   type="button"
+                  onClick={() => setIsAssistantPanelOpen((prev) => !prev)}
                   className="relative inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  aria-label={
+                    isAssistantPanelOpen
+                      ? "Close assistant panel"
+                      : "Open assistant panel"
+                  }
                 >
                   <PanelLeft className="h-3.5 w-3.5" />
-                  <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground">
-                    5
-                  </span>
+                  {isAssistantPanelOpen ? (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground">
+                      5
+                    </span>
+                  ) : null}
                 </button>
                 <div className="mx-1 h-3.5 w-px bg-border"></div>
                 <button
