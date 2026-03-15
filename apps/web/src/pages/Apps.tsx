@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   ArrowUp,
   CircleUser,
+  Cloud,
   Grid2X2,
   Paperclip,
   Plus,
@@ -28,6 +29,8 @@ const projects = [
   { id: "3", name: "Meridian: Architecture of Silence" },
 ];
 
+const modeOptions = ["Agent", "Plan"] as const;
+
 const modelOptions = [
   "Gemini 3.1 Pro Preview",
   "Gemini 3 Flash Preview",
@@ -35,6 +38,7 @@ const modelOptions = [
 ] as const;
 
 export default function Apps() {
+  const [selectedMode, setSelectedMode] = useState<string>(modeOptions[0]);
   const [selectedModel, setSelectedModel] = useState<string>(modelOptions[0]);
 
   return (
@@ -74,6 +78,30 @@ export default function Apps() {
                 />
                 <div className="mt-1 flex items-center justify-between gap-2 px-1 pb-0.5">
                   <div className="flex items-center gap-1">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-6 items-center rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                        >
+                          {selectedMode}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="start"
+                        className="w-32 text-[13px]"
+                      >
+                        {modeOptions.map((option) => (
+                          <DropdownMenuItem
+                            key={option}
+                            onClick={() => setSelectedMode(option)}
+                          >
+                            {option}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
@@ -157,7 +185,8 @@ export default function Apps() {
                   className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] hover:bg-secondary/50"
                 >
                   <span className="text-foreground/90">{project.name}</span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Cloud className="h-3 w-3" />
                     Cloud
                   </span>
                 </Link>
