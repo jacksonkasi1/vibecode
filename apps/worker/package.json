@@ -1,0 +1,28 @@
+{
+  "name": "worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "lint": "eslint . --ext .ts",
+    "check-types": "tsc --noEmit",
+    "deploy:prod": "./.deploy/scripts/deploy.sh prod",
+    "deploy:beta": "./.deploy/scripts/deploy.sh beta",
+    "deploy:sandbox": "./.deploy/scripts/deploy.sh sandbox"
+  },
+  "dependencies": {
+    "@repo/ai": "workspace:*",
+    "@repo/db": "workspace:*",
+    "@repo/logs": "workspace:*",
+    "@repo/shared": "workspace:*",
+    "@t3-oss/env-core": "^0.10.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^20.14.9",
+    "typescript": "^5.5.3"
+  }
+}
