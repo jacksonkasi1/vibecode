@@ -14,9 +14,10 @@ import { getWorkspaces } from "@/rest-api/workspaces";
 export function useAppsData() {
   const [selectedModelId, setSelectedModelId] = useState("");
 
-  const { data: modelsData, isLoading: isModelsLoading } = useQuery({
+  const { data: models = [], isLoading: isModelsLoading } = useQuery({
     queryKey: ["models"],
-    queryFn: () => getModels(),
+    queryFn: () => getModels().then((res) => res.data),
+    initialData: [],
   });
 
   const { data: projectsData, isLoading: isProjectsLoading } = useQuery({
@@ -29,7 +30,6 @@ export function useAppsData() {
     queryFn: () => getWorkspaces(),
   });
 
-  const models = modelsData?.data || [];
   const projects = projectsData?.data || [];
   const workspaces = workspacesData?.data || [];
 

@@ -1,420 +1,559 @@
-// ** import lib
+// ** import types
+import type { KeyboardEvent } from "react";
+import type { Artifact } from "@repo/db";
+
+// ** import core packages
+import { Editor } from "@monaco-editor/react";
 import {
   ArrowLeft,
-  ChevronLeft,
   ChevronRight,
-  ExternalLink,
+  ChevronDown,
+  FileCode,
+  Folder,
   Globe,
   Github,
-  Monitor,
-  MoreHorizontal,
   PanelLeft,
   Pencil,
   Plus,
-  RotateCw,
+  Terminal as TerminalIcon,
   UserPlus,
+  MoreHorizontal,
+  Square,
+  Play,
+  RotateCw,
+  Loader2,
 } from "lucide-react";
-import { useState, useEffect, type KeyboardEvent } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
-// ** import rest-api
-import { getProject, updateProject } from "@/rest-api/projects";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTheme } from "next-themes";
 
 // ** import components
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { VibeAssistantThread } from "@/components/assistant/vibe-assistant-thread";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
-const files = [
-  ".vibe",
-  "vibe-clone",
-  "  node_modules",
-  "  public",
-  "  src",
-  "    App.tsx",
-  "    index.css",
-  "    main.tsx",
-  "  tailwind.config.js",
-];
+// ** import hooks
+import { useProjectActions } from "@/pages/project/hooks/use-project-actions";
+import { useProjectData } from "@/pages/project/hooks/use-project-data";
 
-const editorCode = [
-  "function Features() {",
-  "  return (",
-  '    <section className="py-24 px-4 bg-secondary/5">',
-  '      <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">',
-  "        {/* cards */}",
-  "      </div>",
-  "    </section>",
-  "  )",
-  "}",
-];
+// ** import apis
+import { getModels } from "@/rest-api/models";
 
 export default function Project() {
-  const params = useParams();
+  const { id: projectId = "" } = useParams();
   const queryClient = useQueryClient();
-  const projectId = params.id ?? "1";
+  const { resolvedTheme } = useTheme();
+  const { project, workspace, executions, artifacts, isLoading } =
+    useProjectData(projectId);
+  const { renameProject, runPrompt, isPromptRunning } = useProjectActions({
+    projectId,
+    workspaceId: workspace?.id,
+  });
+
+  const { data: modelsRes } = useQuery({
+    queryKey: ["models"],
+    queryFn: () => getModels().then((res) => res.data),
+    placeholderData: [],
+  });
+  const models = (modelsRes || []) as { id: string; displayName: string }[];
+
+  const isAnyExecutionRunning = useMemo(
+    () =>
+      executions.some(
+        (exec) => exec.status === "queued" || exec.status === "running",
+      ),
+    [executions],
+  );
 
   const [isAssistantPanelOpen, setIsAssistantPanelOpen] = useState(true);
-  const [localProjectName, setLocalProjectName] = useState(
-    `Project #${projectId}`,
-  );
+  const [localProjectName, setLocalProjectName] = useState("");
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<Artifact | null>(null);
+  const [workspaceTab, setWorkspaceTab] = useState<"app" | "code">("code");
+  const [editorWordWrap, setEditorWordWrap] = useState(false);
+  const [editorFontSize, setEditorFontSize] = useState(13);
 
-  const { data: projectResponse, isLoading } = useQuery({
-    queryKey: ["project", projectId],
-    queryFn: () => getProject(projectId),
-  });
+  const latestExecution = useMemo(
+    () => executions[executions.length - 1],
+    [executions],
+  );
+  const editorTheme = resolvedTheme === "light" ? "vs" : "vs-dark";
 
-  const project = projectResponse?.data;
+  const detectLanguage = (file: Artifact | null) => {
+    if (!file) return "typescript";
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith(".tsx") || lower.endsWith(".ts")) return "typescript";
+    if (lower.endsWith(".jsx") || lower.endsWith(".js")) return "javascript";
+    if (lower.endsWith(".json")) return "json";
+    if (lower.endsWith(".css")) return "css";
+    if (lower.endsWith(".md")) return "markdown";
+    if (lower.endsWith(".html")) return "html";
+    return "plaintext";
+  };
 
-  // Sync state if backend loaded
-  useEffect(() => {
-    if (project?.name && !isEditingProjectName) {
-      setLocalProjectName(project.name);
+  const getEditorContent = (file: Artifact | null) => {
+    if (!file) return "// Select a file to view source content...";
+
+    try {
+      const metadata = file.metadata ? JSON.parse(file.metadata) : null;
+      if (metadata?.content && typeof metadata.content === "string") {
+        return metadata.content;
+      }
+    } catch {
+      // fallback to raw metadata
     }
-  }, [project?.name, isEditingProjectName]);
 
-  const updateProjectMutation = useMutation({
-    mutationFn: (newName: string) =>
-      updateProject(projectId, { name: newName }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-    },
-  });
+    return file.metadata || `// ${file.name}\n// Content preview unavailable.`;
+  };
 
-  const finishProjectNameEdit = () => {
-    const trimmed = localProjectName.trim();
-    if (trimmed.length > 0 && trimmed !== project?.name) {
-      updateProjectMutation.mutate(trimmed);
-    } else {
-      setLocalProjectName(project?.name || `Project #${projectId}`);
+  const previewSource = useMemo(() => {
+    const htmlArtifact = artifacts.find((artifact) =>
+      artifact.name.toLowerCase().endsWith(".html"),
+    );
+
+    if (!htmlArtifact) return null;
+
+    try {
+      const metadata = htmlArtifact.metadata
+        ? JSON.parse(htmlArtifact.metadata)
+        : null;
+      if (metadata?.content && typeof metadata.content === "string") {
+        return metadata.content;
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  }, [artifacts]);
+
+  const terminalOutput = useMemo(() => {
+    const logArtifact = [...artifacts]
+      .reverse()
+      .find((artifact) => /run\.log$|\.log$|terminal/i.test(artifact.name));
+
+    if (!logArtifact?.metadata) return "";
+
+    try {
+      const parsed = JSON.parse(logArtifact.metadata) as { content?: unknown };
+      if (typeof parsed.content === "string") {
+        return parsed.content.trim();
+      }
+    } catch {
+      return logArtifact.metadata.trim();
+    }
+
+    return "";
+  }, [artifacts]);
+
+  useEffect(() => {
+    if (project?.name && !isEditingProjectName)
+      setLocalProjectName(project.name);
+  }, [project, isEditingProjectName]);
+
+  // Set default selected file
+  useEffect(() => {
+    if (artifacts.length > 0 && !selectedFile) {
+      const mainFile =
+        artifacts.find(
+          (a) => a.name.includes("App") || a.name.includes("index"),
+        ) || artifacts[0];
+      setSelectedFile(mainFile);
+    }
+  }, [artifacts, selectedFile]);
+
+  const handleFinishRename = () => {
+    if (localProjectName.trim() && localProjectName !== project?.name) {
+      renameProject(localProjectName.trim());
     }
     setIsEditingProjectName(false);
   };
 
-  const handleProjectNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      finishProjectNameEdit();
-      return;
-    }
-
-    if (event.key === "Escape") {
-      setLocalProjectName(project?.name || `Project #${projectId}`);
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter") handleFinishRename();
+    if (e.key === "Escape") {
+      setLocalProjectName(project?.name || "");
       setIsEditingProjectName(false);
     }
   };
 
-  if (isLoading) {
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["artifacts"] });
+    queryClient.invalidateQueries({ queryKey: ["executions"] });
+  };
+
+  if (isLoading)
     return (
-      <ProtectedRoute>
-        <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">
-          Loading project...
-        </div>
-      </ProtectedRoute>
+      <div className="flex h-screen items-center justify-center bg-background text-muted-foreground font-medium animate-in fade-in duration-700">
+        Spawning environment...
+      </div>
     );
-  }
 
   return (
     <ProtectedRoute>
-      <div className="h-[100dvh] overflow-hidden bg-background text-foreground">
-        <div className="flex h-full">
+      <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden font-sans selection:bg-primary/20">
+        <div className="flex flex-1 min-h-0">
+          {/* Assistant Sidebar */}
           <aside
-            className={[
-              "hidden h-full shrink-0 flex-col overflow-hidden bg-[hsl(var(--vibe-panel-2))] transition-[width,min-width,opacity,border-color] duration-200 ease-out md:flex",
-              isAssistantPanelOpen
-                ? "w-[376px] min-w-[376px] border-r border-border opacity-100"
-                : "w-0 min-w-0 border-r border-transparent opacity-0 pointer-events-none",
-            ].join(" ")}
-            aria-hidden={!isAssistantPanelOpen}
+            className={`flex flex-col border-r border-border/40 bg-card/40 transition-all duration-300 ease-in-out ${isAssistantPanelOpen ? "w-[380px]" : "w-0 overflow-hidden border-transparent"}`}
           >
-            <div
-              className={[
-                "flex h-10 shrink-0 w-[376px] items-center justify-between border-b bg-[hsl(var(--vibe-panel-2))] px-2 transition-opacity duration-150",
-                isAssistantPanelOpen
-                  ? "border-border opacity-100"
-                  : "border-transparent opacity-0",
-              ].join(" ")}
-            >
-              <div className="flex items-center gap-1.5">
+            <div className="h-12 flex items-center justify-between px-3 border-b border-border/40">
+              <div className="flex items-center gap-2">
                 <Link
                   to="/apps"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  className="p-1.5 hover:bg-secondary/80 rounded-md transition-colors group"
                 >
-                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <ArrowLeft className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                 </Link>
                 {isEditingProjectName ? (
                   <input
-                    value={localProjectName}
-                    onChange={(event) =>
-                      setLocalProjectName(event.target.value)
-                    }
-                    onBlur={finishProjectNameEdit}
-                    onKeyDown={handleProjectNameKeyDown}
-                    maxLength={40}
                     autoFocus
-                    disabled={updateProjectMutation.isPending}
-                    className="h-6 w-36 rounded-sm border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none disabled:opacity-50"
-                    aria-label="Edit project name"
+                    value={localProjectName}
+                    onChange={(e) => setLocalProjectName(e.target.value)}
+                    onBlur={handleFinishRename}
+                    onKeyDown={handleKeyDown}
+                    className="bg-background border border-primary/30 rounded px-2 py-0.5 text-xs outline-none w-32 focus:border-primary/60 transition-colors shadow-inner"
                   />
                 ) : (
-                  <div className="flex items-center gap-1">
-                    <span className="max-w-[132px] truncate text-xs font-medium">
-                      {project?.name || localProjectName}
+                  <div
+                    className="flex items-center gap-1 group cursor-pointer"
+                    onClick={() => setIsEditingProjectName(true)}
+                  >
+                    <span className="text-[13px] font-semibold truncate max-w-[140px] text-foreground/90">
+                      {project?.name}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingProjectName(true)}
-                      className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                      aria-label="Edit project name"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
+                    <Pencil className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 )}
               </div>
               <ModeToggle />
             </div>
-
-            <div className="w-[376px] flex-1">
-              <VibeAssistantThread />
+            <div className="flex-1 min-h-0">
+              <VibeAssistantThread
+                executions={executions}
+                onSendPrompt={(prompt, modelId) =>
+                  runPrompt({ prompt, modelId })
+                }
+                isSending={isPromptRunning || isAnyExecutionRunning}
+                models={models}
+                runningModelId={
+                  isAnyExecutionRunning
+                    ? latestExecution?.modelId
+                    : undefined
+                }
+              />
             </div>
           </aside>
 
-          <section className="relative flex h-full min-w-0 flex-1 flex-col bg-[hsl(var(--vibe-workspace))]">
-            <div className="flex h-10 items-center justify-between border-b border-border bg-[hsl(var(--vibe-panel-2))] px-2">
-              <div className="flex items-center gap-0.5">
+          {/* Main Workspace */}
+          <main className="flex-1 flex flex-col min-w-0 bg-background">
+            {/* Toolbar */}
+            <header className="h-12 border-b border-border/40 bg-card/40 flex items-center justify-between px-4 z-10 shadow-sm">
+              <div className="flex items-center gap-3">
                 <button
-                  type="button"
-                  onClick={() => setIsAssistantPanelOpen((prev) => !prev)}
-                  className="mr-1 inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                  aria-label={
-                    isAssistantPanelOpen
-                      ? "Close assistant panel"
-                      : "Open assistant panel"
-                  }
+                  onClick={() => setIsAssistantPanelOpen(!isAssistantPanelOpen)}
+                  className="p-1.5 hover:bg-secondary/50 rounded-md transition-all active:scale-95"
+                  title="Toggle Assistant"
                 >
-                  <PanelLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-7 cursor-pointer items-center justify-center rounded-md bg-secondary/80 px-2.5 text-xs font-medium text-foreground transition-colors"
-                >
-                  App
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  Code
-                </button>
-                <div className="mx-1 h-3.5 w-px bg-border"></div>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <Github className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                </button>
-                <div className="mx-1 h-3.5 w-px bg-border"></div>
-                <button
-                  type="button"
-                  className="inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <Globe className="h-3.5 w-3.5" /> Deploy
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </button>
-                <div className="ml-2 h-6 w-6 overflow-hidden rounded-full ring-1 ring-border/50">
-                  <img
-                    src="https://github.com/shadcn.png"
-                    alt="Avatar"
-                    className="h-full w-full object-cover"
+                  <PanelLeft
+                    className={`size-4 transition-colors ${isAssistantPanelOpen ? "text-primary" : "text-muted-foreground"}`}
                   />
+                </button>
+                <div className="flex items-center bg-secondary/30 rounded-lg p-0.5 border border-border/40">
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceTab("app")}
+                    className={[
+                      "px-3 py-1 text-[11px] font-semibold rounded-md border transition-all",
+                      workspaceTab === "app"
+                        ? "bg-background text-foreground border-border/50"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    App
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceTab("code")}
+                    className={[
+                      "px-3 py-1 text-[11px] font-semibold rounded-md border transition-all",
+                      workspaceTab === "code"
+                        ? "bg-background text-foreground border-border/50"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    Code
+                  </button>
                 </div>
+                <button className="p-1.5 hover:bg-secondary/50 rounded-md transition-colors">
+                  <Plus className="size-4 text-muted-foreground" />
+                </button>
               </div>
-            </div>
 
-            <div className="flex h-9 items-center justify-between border-b border-border bg-[hsl(var(--vibe-workspace))] px-2">
-              <div className="flex w-full items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setIsAssistantPanelOpen((prev) => !prev)}
-                  className="relative inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                  aria-label={
-                    isAssistantPanelOpen
-                      ? "Close assistant panel"
-                      : "Open assistant panel"
-                  }
-                >
-                  <PanelLeft className="h-3.5 w-3.5" />
-                  {isAssistantPanelOpen ? (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground">
-                      5
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 mr-2">
+                  {latestExecution?.status === "running" ||
+                  latestExecution?.status === "queued" ? (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-bold uppercase tracking-wider animate-pulse border border-amber-500/20">
+                      <Loader2 className="size-3 animate-spin" /> running
                     </span>
                   ) : null}
-                </button>
-                <div className="mx-1 h-3.5 w-px bg-border"></div>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <RotateCw className="h-3 w-3" />
-                </button>
-
-                <div className="mx-2 flex h-6 max-w-md flex-1 items-center gap-1.5 rounded-md border border-border/40 bg-black/5 px-2 text-[11px] text-muted-foreground transition-colors hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10">
-                  <Globe className="h-3 w-3 opacity-60" />
-                  <span className="truncate tracking-wide">
-                    /projects/{projectId}
-                  </span>
                 </div>
-
-                <div className="ml-auto flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                  >
-                    <Monitor className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                <button className="p-1.5 hover:bg-secondary/50 rounded-md transition-colors">
+                  <Github className="size-4 text-muted-foreground" />
+                </button>
+                <div className="h-4 w-px bg-border/40 mx-1" />
+                <button className="flex items-center gap-1.5 px-4 py-1.5 bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98] rounded-md text-[11px] font-bold transition-all shadow-lg shadow-primary/20 border border-primary/50">
+                  <Globe className="size-3.5" /> Deploy
+                </button>
+                <button className="p-1.5 hover:bg-secondary/50 rounded-md transition-colors">
+                  <MoreHorizontal className="size-4 text-muted-foreground" />
+                </button>
               </div>
-            </div>
+            </header>
 
-            <div className="flex min-h-0 flex-1">
-              <div className="hidden w-56 flex-col border-r border-border bg-[hsl(var(--vibe-panel-2))] lg:flex">
-                <div className="flex h-7 items-center justify-between border-b border-border px-2.5 text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
-                  <span>Explorer</span>
-                  <span className="cursor-pointer hover:text-foreground">
-                    ...
-                  </span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-1.5 scrollbar-thin">
-                  {files.map((name) => {
-                    const isSelected = name.trim() === "App.tsx";
-                    return (
-                      <button
-                        key={name}
-                        className={[
-                          "flex w-full cursor-pointer items-center rounded-sm px-2 py-0.5 text-left text-[11px]",
-                          isSelected
-                            ? "bg-secondary text-foreground"
-                            : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors",
-                        ].join(" ")}
-                      >
-                        {name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex min-w-0 flex-1 flex-col bg-[hsl(var(--vibe-editor))]">
-                <div className="flex h-8 items-center border-b border-border bg-[hsl(var(--vibe-panel-2))] text-[11px]">
-                  <div className="flex h-full items-center border-r border-border border-b border-b-sky-500 px-3 text-sky-400 bg-[hsl(var(--vibe-editor))]">
-                    App.tsx
+            {/* Editor Area */}
+            <div className="flex-1 flex min-h-0 bg-background">
+              {/* Explorer */}
+              {workspaceTab === "code" ? (
+                <div className="w-56 border-r border-border/40 bg-card/30 flex flex-col">
+                  <div className="h-9 flex items-center justify-between px-4 border-b border-border/40 text-[10px] uppercase font-bold text-muted-foreground tracking-widest bg-muted/20">
+                    Explorer
+                    <RotateCw
+                      onClick={handleRefresh}
+                      className="size-3 cursor-pointer hover:text-primary transition-all active:rotate-180"
+                    />
                   </div>
-                  <div className="flex h-full items-center border-r border-border px-3 text-muted-foreground hover:bg-secondary/30 cursor-pointer transition-colors">
-                    tailwind.config.js
-                  </div>
-                </div>
-                <div className="flex h-6 items-center border-b border-border px-3 text-[10px] text-muted-foreground bg-[hsl(var(--vibe-editor))]">
-                  vibe-clone <span className="mx-1.5 opacity-50">&gt;</span> src{" "}
-                  <span className="mx-1.5 opacity-50">&gt;</span> App.tsx
-                </div>
-                <div className="flex-1 overflow-auto p-2 font-mono text-[11px] text-muted-foreground scrollbar-thin">
-                  {editorCode.map((line, idx) => (
-                    <div
-                      key={`${line}-${idx}`}
-                      className="flex leading-5 hover:bg-secondary/30"
-                    >
-                      <span className="w-8 pr-3 text-right opacity-40 select-none">
-                        {122 + idx}
+                  <div className="flex-1 overflow-y-auto py-3 scrollbar-none">
+                    <div className="px-4 py-1.5 text-[11px] text-muted-foreground flex items-center gap-2 hover:bg-secondary/30 cursor-pointer group">
+                      <ChevronDown className="size-3 group-hover:text-foreground transition-colors" />
+                      <Folder className="size-3.5 text-muted-foreground/80" />
+                      <span className="font-semibold group-hover:text-foreground tracking-tight">
+                        src
                       </span>
-                      <span className="whitespace-pre">{line}</span>
                     </div>
-                  ))}
+                    {artifacts.length === 0 ? (
+                      <div className="px-8 py-3 text-[11px] text-muted-foreground/50 italic font-medium">
+                        No files synthesized
+                      </div>
+                    ) : (
+                      artifacts.map((file) => (
+                        <div
+                          key={file.id}
+                          onClick={() => setSelectedFile(file)}
+                          className={`px-8 py-1.5 text-[12px] flex items-center gap-2 cursor-pointer transition-all border-r-2 ${selectedFile?.id === file.id ? "text-primary bg-primary/5 border-primary font-semibold shadow-[inset_-4px_0_8px_-4px_rgba(59,130,246,0.3)]" : "text-muted-foreground/80 hover:bg-secondary/20 border-transparent hover:text-foreground"}`}
+                        >
+                          <FileCode
+                            className={`size-3.5 ${selectedFile?.id === file.id ? "text-primary" : "text-muted-foreground/40"}`}
+                          />
+                          <span className="truncate">{file.name}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
+              ) : null}
+
+              {/* Central Editor */}
+              <div className="flex-1 flex flex-col min-w-0 bg-background">
+                {workspaceTab === "app" ? (
+                  <div className="flex-1 overflow-hidden border-l border-border/40 bg-card/20">
+                    {previewSource ? (
+                      <iframe
+                        title="App preview"
+                        sandbox="allow-scripts allow-same-origin"
+                        srcDoc={previewSource}
+                        className="h-full w-full bg-white"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                        Preview not available yet
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="h-9 flex items-center bg-card/30 px-1 border-b border-border/40 gap-0.5">
+                      {selectedFile ? (
+                        <div className="h-full flex items-center gap-2.5 px-4 bg-card border-t-2 border-primary text-[11px] font-bold text-foreground animate-in slide-in-from-top-1 duration-300">
+                          <FileCode className="size-3.5 text-primary" />
+                          {selectedFile.name}
+                        </div>
+                      ) : (
+                        <div className="h-full flex items-center gap-2.5 px-4 italic text-muted-foreground text-[11px] opacity-50">
+                          No file open
+                        </div>
+                      )}
+                      <div className="ml-auto flex items-center gap-1 px-2 text-[10px] text-muted-foreground">
+                        <button
+                          type="button"
+                          onClick={() => setEditorWordWrap((prev) => !prev)}
+                          className="rounded px-1.5 py-0.5 hover:bg-secondary/40 hover:text-foreground transition-colors"
+                        >
+                          Wrap {editorWordWrap ? "On" : "Off"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditorFontSize((prev) => Math.max(prev - 1, 11))
+                          }
+                          className="rounded px-1.5 py-0.5 hover:bg-secondary/40 hover:text-foreground transition-colors"
+                        >
+                          A-
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditorFontSize((prev) => Math.min(prev + 1, 16))
+                          }
+                          className="rounded px-1.5 py-0.5 hover:bg-secondary/40 hover:text-foreground transition-colors"
+                        >
+                          A+
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex-1 pt-1 overflow-hidden relative">
+                      {!selectedFile && (
+                        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                          <div className="flex flex-col items-center gap-4 text-muted-foreground/20">
+                            <FileCode className="size-16" />
+                            <span className="text-sm font-bold tracking-widest uppercase">
+                              Workspace Ready
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <Editor
+                        theme={editorTheme}
+                        language={detectLanguage(selectedFile)}
+                        value={getEditorContent(selectedFile)}
+                        loading={
+                          <div className="p-3 text-xs text-muted-foreground">
+                            Loading editor...
+                          </div>
+                        }
+                        options={{
+                          fontSize: editorFontSize,
+                          fontFamily:
+                            "'JetBrains Mono', 'Fira Code', monospace",
+                          minimap: { enabled: false },
+                          scrollBeyondLastLine: false,
+                          lineNumbers: "on",
+                          padding: { top: 12 },
+                          renderLineHighlight: "all",
+                          automaticLayout: true,
+                          wordWrap: editorWordWrap ? "on" : "off",
+                          bracketPairColorization: { enabled: true },
+                          guides: { indentation: true },
+                          scrollbar: {
+                            vertical: "visible",
+                            horizontal: "visible",
+                            verticalScrollbarSize: 8,
+                            horizontalScrollbarSize: 8,
+                          },
+                          readOnly: true,
+                          cursorSmoothCaretAnimation: "on",
+                          smoothScrolling: true,
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            <div className="h-[160px] flex flex-col border-t border-border bg-[hsl(var(--vibe-terminal))]">
-              <div className="flex h-7 items-center justify-between border-b border-border px-3 text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-                <div className="flex items-center gap-3">
-                  <span className="cursor-pointer hover:text-foreground transition-colors">
-                    Problems
-                  </span>
-                  <span className="cursor-pointer hover:text-foreground transition-colors">
-                    Output
-                  </span>
-                  <span className="cursor-pointer hover:text-foreground transition-colors">
-                    Debug Console
-                  </span>
-                  <span className="text-foreground border-b border-foreground h-7 flex items-center">
-                    Terminal
-                  </span>
-                  <span className="cursor-pointer hover:text-foreground transition-colors">
-                    Ports
-                  </span>
+            {/* Terminal Area */}
+            <footer className="h-48 border-t border-border/40 bg-card/20 flex flex-col z-20">
+              <div className="h-9 flex items-center px-4 border-b border-border/40 gap-6 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
+                <div className="flex items-center gap-2 text-primary border-b-2 border-primary h-full px-1">
+                  <TerminalIcon className="size-3" /> Terminal
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <ChevronRight className="h-3 w-3 rotate-90" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-auto bg-[hsl(var(--vibe-editor))] p-2 font-mono text-[11px] text-emerald-400 scrollbar-thin leading-5">
-                <div className="flex items-center gap-2">
-                  <span className="text-blue-400 opacity-80">➜</span>{" "}
-                  <span className="text-emerald-400">~/vibecode</span>{" "}
-                  <span className="text-muted-foreground">$</span> bun run dev
-                </div>
-                <div className="mt-1 text-yellow-400/90">
-                  VITE v8 ready in 128 ms
-                </div>
-                <div className="mt-1 text-foreground/80">
-                  Local: http://localhost:3000/
+                <span className="hover:text-foreground cursor-pointer transition-colors flex items-center h-full">
+                  Output
+                </span>
+                <span className="hover:text-foreground cursor-pointer transition-colors flex items-center h-full">
+                  Debug
+                </span>
+
+                <div className="ml-auto flex items-center gap-5">
+                  {(latestExecution?.status === "running" ||
+                    latestExecution?.status === "queued") && (
+                    <button className="flex items-center gap-1.5 text-destructive hover:text-white hover:bg-destructive/20 px-2 py-0.5 rounded transition-all">
+                      <Square className="size-3 fill-current" /> Stop
+                    </button>
+                  )}
+                  <button
+                    onClick={() =>
+                      runPrompt({
+                        prompt: "Re-run current logic",
+                        modelId: latestExecution?.modelId || "gemini-2.0-flash",
+                      })
+                    }
+                    className="flex items-center gap-1.5 text-emerald-500 hover:text-foreground hover:bg-emerald-500/20 px-2 py-0.5 rounded transition-all"
+                  >
+                    <Play className="size-3 fill-current" /> Run
+                  </button>
                 </div>
               </div>
-            </div>
-          </section>
+              <div className="flex-1 p-5 font-mono text-[12px] bg-background overflow-y-auto scrollbar-thin scrollbar-thumb-white/5">
+                <div className="flex gap-2.5 items-center mb-3">
+                  <span className="px-2 py-0.5 rounded-sm bg-emerald-500/10 text-emerald-500 text-[10px] font-black tracking-tighter shadow-sm border border-emerald-500/20">
+                    AGENT_ACTIVE
+                  </span>
+                  <span className="text-muted-foreground/40 text-[10px] tracking-wide">
+                    {new Date().toLocaleTimeString()}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 text-muted-foreground/90">
+                  <div className="flex gap-2 items-center">
+                    <span className="text-emerald-500 font-bold opacity-80">
+                      ➜
+                    </span>
+                    <span className="text-primary font-bold tracking-tight">
+                      vibecode
+                    </span>
+                    <span className="text-muted-foreground/50 font-bold">
+                      on
+                    </span>
+                    <span className="text-muted-foreground font-bold">
+                      session/{projectId.substring(0, 6)}
+                    </span>
+                    <span className="text-foreground italic font-medium ml-1">
+                      vibe start --watch
+                    </span>
+                  </div>
+
+                  {latestExecution ? (
+                    <div className="mt-3 space-y-2 border-l border-border/30 pl-4 ml-1">
+                      {terminalOutput ? (
+                        <pre className="whitespace-pre-wrap break-words rounded-md border border-border/30 bg-card/30 p-2 text-[11px] text-foreground/90">
+                          {terminalOutput}
+                        </pre>
+                      ) : null}
+
+                      {latestExecution.errorMessage && (
+                        <div className="text-red-400 bg-red-400/5 p-3 rounded-md border border-red-400/20 mt-3 font-sans text-xs">
+                          <span className="font-bold flex items-center gap-2 mb-1">
+                            <Square className="size-3 fill-current" /> Error
+                            Stack:
+                          </span>
+                          {latestExecution.errorMessage}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-6 text-center py-8">
+                      <div className="inline-block px-4 py-2 rounded-lg border border-border/40 bg-card/40 text-muted-foreground/60 text-[11px] font-bold tracking-[0.3em] uppercase">
+                        No active processes
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </footer>
+          </main>
         </div>
       </div>
     </ProtectedRoute>

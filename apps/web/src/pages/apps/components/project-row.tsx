@@ -49,6 +49,7 @@ type ProjectRowProps = {
   onContinueCancel: () => void;
   onContinueSubmit: () => void;
   continueSubmitting: boolean;
+  onOpenMenu: (project: Project, x: number, y: number) => void;
 };
 
 export function ProjectRow({
@@ -77,6 +78,7 @@ export function ProjectRow({
   onContinueCancel,
   onContinueSubmit,
   continueSubmitting,
+  onOpenMenu,
 }: ProjectRowProps) {
   const isOnline = workspace
     ? ["running", "starting"].includes(workspace.status)
@@ -173,7 +175,12 @@ export function ProjectRow({
 
         <button
           type="button"
-          onClick={() => onOpenContinueConfig(project)}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const rect = event.currentTarget.getBoundingClientRect();
+            onOpenMenu(project, rect.left, rect.bottom + 8);
+          }}
           className={[
             "inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
             isSelected ? "bg-secondary text-foreground" : "",

@@ -17,7 +17,9 @@ export interface GetExecutionsResponse {
 export const getExecutions = async (
   workspaceId?: string,
 ): Promise<GetExecutionsResponse> => {
-  const url = workspaceId ? `/api/executions?workspaceId=${workspaceId}` : "/api/executions";
+  const url = workspaceId
+    ? `/api/executions?workspaceId=${workspaceId}`
+    : "/api/executions";
   const response = await axiosInstance.get<GetExecutionsResponse>(url);
 
   return response.data;
