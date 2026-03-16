@@ -1,6 +1,6 @@
 // ** import lib
 import { db } from "@repo/db";
-import { execution, eq } from "@repo/db";
+import { execution, and, eq } from "@repo/db";
 import { logger } from "@repo/logs";
 
 // ** import config
@@ -8,6 +8,34 @@ import { env } from "@/config/env";
 import { runExecution } from "./runner";
 
 let isPolling = false;
+
+function formatUnknownError(error: unknown) {
+  if (error instanceof Error) {
+    return error.stack || error.message;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const maybeErrorEvent = error as {
+      type?: unknown;
+      message?: unknown;
+      reason?: unknown;
+      code?: unknown;
+    };
+
+    try {
+      return JSON.stringify({
+        type: maybeErrorEvent.type,
+        message: maybeErrorEvent.message,
+        reason: maybeErrorEvent.reason,
+        code: maybeErrorEvent.code,
+      });
+    } catch {
+      return String(error);
+    }
+  }
+
+  return String(error);
+}
 
 export async function startPoller() {
   if (isPolling) return;
@@ -21,9 +49,7 @@ export async function startPoller() {
     try {
       await pollForExecution();
     } catch (error) {
-      logger.error(
-        `Poller error: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      logger.error(`Poller error: ${formatUnknownError(error)}`);
     }
 
     // Wait before next poll
@@ -32,31 +58,53 @@ export async function startPoller() {
 }
 
 async function pollForExecution() {
-  // Find a queued execution
   const [queued] = await db
-    .select()
+    .select({ id: execution.id })
     .from(execution)
     .where(eq(execution.status, "queued"))
     .orderBy(execution.createdAt)
     .limit(1);
 
-  if (!queued) return;
+  if (!queued) return false;
 
-  // Attempt to claim it
+  const claimed = await claimExecutionById(queued.id);
+
+  if (!claimed) {
+    logger.warn(`Execution ${queued.id} was claimed by another worker.`);
+    return false;
+  }
+
+  runClaimedExecution(claimed);
+  return true;
+}
+
+export async function claimAndRunExecutionById(executionId: string) {
+  const claimed = await claimExecutionById(executionId);
+  if (!claimed) {
+    logger.warn(
+      `Execution ${executionId} is not claimable (already running or finished).`,
+    );
+    return false;
+  }
+
+  runClaimedExecution(claimed);
+  return true;
+}
+
+async function claimExecutionById(executionId: string) {
   const [claimed] = await db
     .update(execution)
     .set({
       status: "running",
       startedAt: new Date(),
     })
-    .where(eq(execution.id, queued.id))
+    .where(and(eq(execution.id, executionId), eq(execution.status, "queued")))
     .returning();
 
-  if (!claimed) {
-    logger.warn(`Execution ${queued.id} was claimed by another worker.`);
-    return;
-  }
+  return claimed;
+}
 
+function runClaimedExecution(claimed: typeof execution.$inferSelect) {
   logger.info(`Claimed execution ${claimed.id}. Starting runner...`);
 
   // Run the execution asynchronously so the poller isn't completely blocked

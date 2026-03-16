@@ -3,12 +3,26 @@ import { Hono } from "hono";
 
 // ** import lib
 import { db } from "@repo/db";
-import { workspace, project, execution, eq, and } from "@repo/db";
+import {
+  and,
+  asc,
+  chatMessage,
+  chatThread,
+  desc,
+  eq,
+  execution,
+  executionEvent,
+  project,
+  workspace,
+} from "@repo/db";
 import { newId } from "@repo/db";
 import { logger } from "@repo/logs";
 
 // ** import types
 import type { AppEnv } from "@/types";
+
+// ** import utils
+import { dispatchExecutionQueued } from "@/lib/execution-dispatch";
 
 const route = new Hono<AppEnv>();
 
@@ -37,20 +51,76 @@ route.post("/", async (c) => {
       return c.json({ error: "Workspace not found or access denied" }, 404);
     }
 
-    const id = newId();
-    const [created] = await db
-      .insert(execution)
-      .values({
-        id,
-        workspaceId,
-        userId: user.id,
-        prompt,
-        modelId: modelId || null,
-        status: "queued",
-      })
-      .returning();
+    const [existingThread] = await db
+      .select()
+      .from(chatThread)
+      .where(
+        and(
+          eq(chatThread.workspaceId, workspaceId),
+          eq(chatThread.userId, user.id),
+        ),
+      )
+      .orderBy(desc(chatThread.updatedAt), asc(chatThread.createdAt))
+      .limit(1);
 
-    // TODO: Phase 1 — notify worker to pick up the task
+    const threadId = existingThread?.id ?? newId();
+    const executionId = newId();
+
+    const [created] = await db.transaction(async (tx) => {
+      if (!existingThread) {
+        await tx.insert(chatThread).values({
+          id: threadId,
+          workspaceId,
+          userId: user.id,
+          title: null,
+        });
+      }
+
+      await tx.insert(chatMessage).values({
+        id: newId(),
+        threadId,
+        role: "user",
+        contentJson: {
+          parts: [{ type: "text", text: prompt }],
+        },
+      });
+
+      const [createdExecution] = await tx
+        .insert(execution)
+        .values({
+          id: executionId,
+          workspaceId,
+          userId: user.id,
+          prompt,
+          modelId: modelId || null,
+          status: "queued",
+        })
+        .returning();
+
+      await tx.insert(executionEvent).values({
+        id: newId(),
+        executionId,
+        seq: 1,
+        type: "status",
+        payloadJson: {
+          status: "queued",
+          queuedAt: new Date().toISOString(),
+        },
+      });
+
+      await tx
+        .update(chatThread)
+        .set({ updatedAt: new Date() })
+        .where(eq(chatThread.id, threadId));
+
+      return [createdExecution] as const;
+    });
+
+    await dispatchExecutionQueued({
+      executionId: created.id,
+      workspaceId: created.workspaceId,
+      userId: created.userId,
+    });
 
     return c.json({ data: created }, 201);
   } catch (error) {

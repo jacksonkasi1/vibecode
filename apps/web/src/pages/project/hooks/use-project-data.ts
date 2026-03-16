@@ -32,13 +32,6 @@ export function useProjectData(projectId: string) {
     queryKey: ["executions", workspace?.id],
     queryFn: () => getExecutions(workspace?.id),
     enabled: !!workspace?.id,
-    refetchInterval: (query) => {
-      // Poll if any execution is in progress
-      const hasInProgress = query.state.data?.data?.some(
-        (exec) => exec.status === "queued" || exec.status === "running",
-      );
-      return hasInProgress ? 800 : false;
-    },
   });
 
   const executions = useMemo(() => {

@@ -128,25 +128,6 @@ export default function Project() {
     return null;
   }, [artifacts]);
 
-  const terminalOutput = useMemo(() => {
-    const logArtifact = [...artifacts]
-      .reverse()
-      .find((artifact) => /run\.log$|\.log$|terminal/i.test(artifact.name));
-
-    if (!logArtifact?.metadata) return "";
-
-    try {
-      const parsed = JSON.parse(logArtifact.metadata) as { content?: unknown };
-      if (typeof parsed.content === "string") {
-        return parsed.content.trim();
-      }
-    } catch {
-      return logArtifact.metadata.trim();
-    }
-
-    return "";
-  }, [artifacts]);
-
   useEffect(() => {
     if (project?.name && !isEditingProjectName)
       setLocalProjectName(project.name);
@@ -238,9 +219,7 @@ export default function Project() {
                 isSending={isPromptRunning || isAnyExecutionRunning}
                 models={models}
                 runningModelId={
-                  isAnyExecutionRunning
-                    ? latestExecution?.modelId
-                    : undefined
+                  isAnyExecutionRunning ? latestExecution?.modelId : undefined
                 }
               />
             </div>
@@ -527,12 +506,6 @@ export default function Project() {
 
                   {latestExecution ? (
                     <div className="mt-3 space-y-2 border-l border-border/30 pl-4 ml-1">
-                      {terminalOutput ? (
-                        <pre className="whitespace-pre-wrap break-words rounded-md border border-border/30 bg-card/30 p-2 text-[11px] text-foreground/90">
-                          {terminalOutput}
-                        </pre>
-                      ) : null}
-
                       {latestExecution.errorMessage && (
                         <div className="text-red-400 bg-red-400/5 p-3 rounded-md border border-red-400/20 mt-3 font-sans text-xs">
                           <span className="font-bold flex items-center gap-2 mb-1">
