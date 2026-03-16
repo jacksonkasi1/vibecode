@@ -12,6 +12,7 @@
     "deploy:sandbox": "./.deploy/scripts/deploy.sh sandbox"
   },
   "dependencies": {
+    "@google-cloud/pubsub": "^5.3.0",
     "@repo/ai": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/logs": "workspace:*",

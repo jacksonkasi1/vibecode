@@ -31,6 +31,13 @@ export const env = createEnv({
     R2_PUBLIC_URL: z.string().url().optional(),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
+
+    EXECUTION_DISPATCH_MODE: z
+      .enum(["local_polling", "pubsub"])
+      .default("local_polling"),
+    PUBSUB_PROJECT_ID: z.string().optional(),
+    PUBSUB_EXECUTIONS_TOPIC: z.string().optional(),
+    EXECUTION_STREAM_POLL_MS: z.coerce.number().default(250),
   },
 
   runtimeEnv: process.env,

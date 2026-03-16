@@ -4,10 +4,13 @@ import { streamSSE } from "hono/streaming";
 
 // ** import lib
 import { db } from "@repo/db";
-import { execution, eq, and } from "@repo/db";
+import { and, asc, eq, execution, executionEvent, gt } from "@repo/db";
 
 // ** import types
 import type { AppEnv } from "@/types";
+
+// ** import config
+import { env } from "@/config/env";
 
 const route = new Hono<AppEnv>();
 
@@ -24,6 +27,17 @@ route.get("/:id/stream", async (c) => {
 
   if (!found) return c.json({ error: "Execution not found" }, 404);
 
+  const headerCursor = Number(
+    c.req.header("last-event-id") ?? c.req.header("Last-Event-ID"),
+  );
+  const queryCursor = Number(c.req.query("cursor"));
+  let lastSeq = Number.isFinite(queryCursor)
+    ? queryCursor
+    : Number.isFinite(headerCursor)
+      ? headerCursor
+      : 0;
+  if (!Number.isFinite(lastSeq) || lastSeq < 0) lastSeq = 0;
+
   return streamSSE(c, async (stream) => {
     // Send initial status
     await stream.writeSSE({
@@ -39,8 +53,39 @@ route.get("/:id/stream", async (c) => {
     let currentStatus = found.status;
     const terminalStatuses = ["completed", "failed", "cancelled"];
 
-    while (!terminalStatuses.includes(currentStatus)) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    while (true) {
+      const eventRows = await db
+        .select()
+        .from(executionEvent)
+        .where(
+          and(
+            eq(executionEvent.executionId, id),
+            gt(executionEvent.seq, lastSeq),
+          ),
+        )
+        .orderBy(asc(executionEvent.seq));
+
+      for (const row of eventRows) {
+        lastSeq = row.seq;
+        await stream.writeSSE({
+          id: String(row.seq),
+          event: "execution:event",
+          data: JSON.stringify({
+            type: "execution:event",
+            data: {
+              executionId: row.executionId,
+              seq: row.seq,
+              eventType: row.type,
+              payload: row.payloadJson,
+            },
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, env.EXECUTION_STREAM_POLL_MS),
+      );
 
       const [updated] = await db
         .select()
@@ -65,6 +110,39 @@ route.get("/:id/stream", async (c) => {
             timestamp: new Date().toISOString(),
           }),
         });
+      }
+
+      if (terminalStatuses.includes(currentStatus)) {
+        const trailingEventRows = await db
+          .select()
+          .from(executionEvent)
+          .where(
+            and(
+              eq(executionEvent.executionId, id),
+              gt(executionEvent.seq, lastSeq),
+            ),
+          )
+          .orderBy(asc(executionEvent.seq));
+
+        for (const row of trailingEventRows) {
+          lastSeq = row.seq;
+          await stream.writeSSE({
+            id: String(row.seq),
+            event: "execution:event",
+            data: JSON.stringify({
+              type: "execution:event",
+              data: {
+                executionId: row.executionId,
+                seq: row.seq,
+                eventType: row.type,
+                payload: row.payloadJson,
+              },
+              timestamp: new Date().toISOString(),
+            }),
+          });
+        }
+
+        break;
       }
     }
   });
