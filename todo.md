@@ -89,16 +89,16 @@ Split conversation memory from execution jobs and keep Postgres as canonical sta
 
 #### Database model
 
-- [ ] Add `chat_thread` table (`id`, `workspace_id`, `user_id`, `title`, `created_at`, `updated_at`)
-- [ ] Add `chat_message` table (`id`, `thread_id`, `role`, `content_json`, `token_count`, `created_at`, optional `parent_id`)
-- [ ] Add index `chat_message(thread_id, created_at)`
-- [ ] Add index `chat_thread(workspace_id, updated_at)`
+- [x] Add `chat_thread` table (`id`, `workspace_id`, `user_id`, `title`, `created_at`, `updated_at`)
+- [x] Add `chat_message` table (`id`, `thread_id`, `role`, `content_json`, `token_count`, `created_at`, optional `parent_id`)
+- [x] Add index `chat_message(thread_id, created_at)`
+- [x] Add index `chat_thread(workspace_id, updated_at)`
 
 #### Server + worker flow
 
-- [ ] On prompt create: insert user `chat_message` before creating `execution`
-- [ ] On worker completion: insert assistant `chat_message` from final model output
-- [ ] Keep `execution` as run status/artifact record (not primary thread memory)
+- [x] On prompt create: insert user `chat_message` before creating `execution`
+- [x] On worker completion: insert assistant `chat_message` from final model output
+- [x] Keep `execution` as run status/artifact record (not primary thread memory)
 - [ ] Keep assistant-ui thread timeline sourced from `chat_message`
 
 ### Phase 1.2: Latency + Production Dispatch (Before Phase 2)
@@ -108,9 +108,9 @@ Reduce perceived delay first, then scale safely in production.
 #### Runtime and dispatch
 
 - [x] Keep local DB poller (`poller.ts`) for development mode
-- [ ] Add production dispatch via Pub/Sub worker listener
-- [ ] Add env toggle: local poller vs Pub/Sub
-- [ ] Reduce queue-start delay (remove dependency on polling interval in production)
+- [x] Add production dispatch via Pub/Sub worker listener
+- [x] Add env toggle: local poller vs Pub/Sub
+- [x] Reduce queue-start delay (remove dependency on polling interval in production)
 
 #### Model and timing instrumentation
 
@@ -132,15 +132,22 @@ Prepare true streaming and replay without breaking current UI.
 
 #### Event schema
 
-- [ ] Add `execution_event` table (`id`, `execution_id`, `seq`, `type`, `payload_json`, `created_at`)
-- [ ] Add index `execution_event(execution_id, seq)`
-- [ ] Treat `execution.result` as final snapshot only; events become run timeline
+- [x] Add `execution_event` table (`id`, `execution_id`, `seq`, `type`, `payload_json`, `created_at`)
+- [x] Add index `execution_event(execution_id, seq)`
+- [x] Treat `execution.result` as final snapshot only; events become run timeline
 
 #### API + UI prep
 
 - [x] Keep `/executions/:id/stream` backward compatible while preparing event-backed streaming
 - [x] Route tool/status output to terminal/event panel, keep markdown reply clean in chat
 - [ ] Validate reconnect/reload replay correctness from persisted events
+
+#### Production verification (pending deploy credentials)
+
+- [x] Create/verify Pub/Sub resources with standard names (`vibecode-executions-v1`, `vibecode-worker-executions-v1`)
+- [x] Verify local Pub/Sub smoke test (server publish + worker consume)
+- [ ] Verify Pub/Sub IAM for topic publisher (server) and subscription consumer (worker)
+- [ ] Verify production smoke test: queued -> running -> completed with event replay
 
 #### Pre-Phase-2 gate
 

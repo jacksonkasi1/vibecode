@@ -185,9 +185,9 @@ function buildTiming(
   execution: Execution,
   completionTokens?: number,
 ): MessageTiming | undefined {
-  const streamStartTime = execution.startedAt
-    ? new Date(String(execution.startedAt)).getTime()
-    : new Date(String(execution.createdAt)).getTime();
+  // Use createdAt so the badge reflects end-to-end user wait,
+  // including queue delay before worker claim.
+  const streamStartTime = new Date(String(execution.createdAt)).getTime();
   const endTime = execution.completedAt
     ? new Date(String(execution.completedAt)).getTime()
     : Date.now();
@@ -317,7 +317,13 @@ export function VibeAssistantThread({
 
   useEffect(() => {
     if (modelList.length > 0 && !selectedModelId) {
-      setSelectedModelId(modelList[0].id);
+      const preferredFastModel = modelList.find((model) => {
+        const id = model.id.toLowerCase();
+        const name = model.displayName.toLowerCase();
+        return id.includes("flash") || name.includes("flash");
+      });
+
+      setSelectedModelId(preferredFastModel?.id || modelList[0].id);
     }
   }, [modelList, selectedModelId]);
 
