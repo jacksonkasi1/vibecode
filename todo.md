@@ -83,37 +83,70 @@ Build the foundation and one reliable coding agent.
 
 ---
 
-### Phase 1.2: Cloud Infrastructure & Security (GCP)
+### Phase 1.1: Thread Foundation (Before Phase 2)
 
-Move the execution environment from simple local processes to secure, scalable Google Cloud Compute Engine VMs with dual-mode support for local development.
+Split conversation memory from execution jobs and keep Postgres as canonical state.
 
-#### Dual-Mode Architecture
-- [ ] Keep existing local DB Poller loop (`poller.ts`) for local development
-- [ ] Add Google Cloud Pub/Sub listener for production environment
-- [ ] Create environment toggle: local DB polling vs production Pub/Sub
+#### Database model
 
-#### Cloud VM Orchestration (Server)
+- [ ] Add `chat_thread` table (`id`, `workspace_id`, `user_id`, `title`, `created_at`, `updated_at`)
+- [ ] Add `chat_message` table (`id`, `thread_id`, `role`, `content_json`, `token_count`, `created_at`, optional `parent_id`)
+- [ ] Add index `chat_message(thread_id, created_at)`
+- [ ] Add index `chat_thread(workspace_id, updated_at)`
+
+#### Server + worker flow
+
+- [ ] On prompt create: insert user `chat_message` before creating `execution`
+- [ ] On worker completion: insert assistant `chat_message` from final model output
+- [ ] Keep `execution` as run status/artifact record (not primary thread memory)
+- [ ] Keep assistant-ui thread timeline sourced from `chat_message`
+
+### Phase 1.2: Latency + Production Dispatch (Before Phase 2)
+
+Reduce perceived delay first, then scale safely in production.
+
+#### Runtime and dispatch
+
+- [x] Keep local DB poller (`poller.ts`) for development mode
+- [ ] Add production dispatch via Pub/Sub worker listener
+- [ ] Add env toggle: local poller vs Pub/Sub
+- [ ] Reduce queue-start delay (remove dependency on polling interval in production)
+
+#### Model and timing instrumentation
+
+- [ ] Set faster default model for interactive turns (pro remains selectable)
+- [ ] Add timing logs: `queued_at`, `claimed_at`, `first_model_call_at`, `completed_at`
+- [ ] Add latency dashboard fields to execution metadata (queue wait, run duration)
+
+#### Cloud VM orchestration (existing scope)
+
 - [ ] Integrate `@google-cloud/compute` SDK in `apps/server`
 - [ ] Build API to dynamically spawn Compute Engine VMs (scale to zero)
 - [ ] Map instance sizing endpoints (Standard `e2-medium`, Pro `e2-standard-4`)
-- [ ] Create VM Startup Script (Bash) that:
-  - [ ] Pulls the VIBECode Worker repo/image
-  - [ ] Injects `EXECUTION_ID` and `DATABASE_URL` 
-  - [ ] Auto-shuts down (`sudo poweroff`) when execution completes
-- [ ] Build custom VM Machine Image (pre-installed Ubuntu, Node v20, Bun v1.2, Python)
+- [ ] Create VM startup script that pulls worker image/repo, injects runtime env, and auto-shuts down
+- [ ] Build custom VM image (Ubuntu + Node + Bun + Python)
 
-#### Zero-Latency Sandboxing (Worker)
-- [ ] Set up strict Linux User Permissions on the Worker VM
-  - [ ] `vibecode-admin`: Runs the Node app, owns `.env`, restricted access (`chmod 700`)
-  - [ ] `workspace-user`: Unprivileged user for AI code execution
-- [ ] Refactor `execute_command` tool to run via `sudo -u workspace-user -- bash -c`
-- [ ] Create restricted filesystem jail (`chroot`) mapping to GitHub repo
+### Phase 1.3: Event Log Readiness (Before Phase 2)
 
-#### Workspace State Management
-- [ ] Auto-pull target user code from GitHub on VM boot
-- [ ] Upload final artifacts and diffs to Cloudflare R2 on completion
-- [ ] Gracefully pause/stop VMs on user command (save persistent disk)
-- [ ] Resume VM from paused state
+Prepare true streaming and replay without breaking current UI.
+
+#### Event schema
+
+- [ ] Add `execution_event` table (`id`, `execution_id`, `seq`, `type`, `payload_json`, `created_at`)
+- [ ] Add index `execution_event(execution_id, seq)`
+- [ ] Treat `execution.result` as final snapshot only; events become run timeline
+
+#### API + UI prep
+
+- [x] Keep `/executions/:id/stream` backward compatible while preparing event-backed streaming
+- [x] Route tool/status output to terminal/event panel, keep markdown reply clean in chat
+- [ ] Validate reconnect/reload replay correctness from persisted events
+
+#### Pre-Phase-2 gate
+
+- [ ] Verify memory continuity across turns from `chat_message`
+- [ ] Verify measurable latency improvement from baseline
+- [ ] Verify no regression in workspace execution and artifact saving
 
 ---
 

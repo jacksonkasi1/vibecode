@@ -387,6 +387,7 @@ export function ContinueProjectsSection({
                 }
                 onOpenContinueConfig={onOpenContinueConfig}
                 disableRename={disableActions}
+                onOpenMenu={handleOpenProjectActionsMenu}
                 continuePreset={continuePreset}
                 onContinuePresetSelect={onContinuePresetSelect}
                 showContinueCustomize={showContinueCustomize}

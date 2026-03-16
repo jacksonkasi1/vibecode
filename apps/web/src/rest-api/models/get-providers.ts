@@ -14,7 +14,9 @@ export interface GetProvidersResponse {
  * @returns Promise with array of providers
  */
 export const getProviders = async (): Promise<GetProvidersResponse> => {
-  const response = await axiosInstance.get<GetProvidersResponse>("/api/models/providers");
+  const response = await axiosInstance.get<GetProvidersResponse>(
+    "/api/models/providers",
+  );
 
   return response.data;
 };

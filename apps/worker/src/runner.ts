@@ -4,7 +4,7 @@ import path from "node:path";
 
 // ** import lib
 import { db } from "@repo/db";
-import { execution, artifact, eq } from "@repo/db";
+import { execution, artifact, eq, and, lt, asc } from "@repo/db";
 import { newId } from "@repo/db";
 import { logger } from "@repo/logs";
 import { GeminiProvider } from "@repo/ai";
@@ -42,10 +42,42 @@ Think step-by-step and complete the objective.`;
 
     logEvent("Starting AI generation...");
 
-    const messages: ChatMessage[] = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: execRecord.prompt },
-    ];
+    const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
+
+    // Build conversation history
+    const previousExecutions = await db
+      .select()
+      .from(execution)
+      .where(
+        and(
+          eq(execution.workspaceId, execRecord.workspaceId),
+          lt(execution.createdAt, execRecord.createdAt),
+        ),
+      )
+      .orderBy(asc(execution.createdAt));
+
+    for (const prev of previousExecutions) {
+      if (prev.prompt) {
+        messages.push({ role: "user", content: prev.prompt });
+      }
+      if (prev.status === "completed" && prev.result) {
+        let assistantText = prev.result;
+        try {
+          const parsed = JSON.parse(prev.result);
+          if (parsed.text) {
+            assistantText = parsed.text;
+          }
+        } catch {
+          // Keep raw result
+        }
+        if (assistantText) {
+          messages.push({ role: "assistant", content: assistantText });
+        }
+      }
+    }
+
+    // Add current prompt
+    messages.push({ role: "user", content: execRecord.prompt });
 
     let step = 0;
     const MAX_STEPS = 10; // Prevent infinite loops in Phase 1
