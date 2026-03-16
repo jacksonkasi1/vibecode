@@ -18,7 +18,7 @@ export const getArtifacts = async (
   executionId: string,
 ): Promise<GetArtifactsResponse> => {
   const response = await axiosInstance.get<GetArtifactsResponse>(
-    `/api/artifacts?executionId=${executionId}`
+    `/api/artifacts?executionId=${executionId}`,
   );
 
   return response.data;
