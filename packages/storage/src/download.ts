@@ -1,7 +1,3 @@
-// ** import core packages
-import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
 // ** import utils
 import { createR2Client } from "./client";
 
@@ -14,15 +10,16 @@ export async function r2GetSignedDownloadUrl(
   options?: { expiresIn?: number },
 ): Promise<string> {
   const client = createR2Client(env);
+  const bucket = client.bucket(env.GCS_BUCKET_NAME);
+  const file = bucket.file(filePath);
 
-  const command = new GetObjectCommand({
-    Bucket: env.R2_BUCKET_NAME,
-    Key: filePath,
+  const [signedUrl] = await file.getSignedUrl({
+    version: "v4",
+    action: "read",
+    expires: Date.now() + (options?.expiresIn || 3600) * 1000,
   });
 
-  return getSignedUrl(client, command, {
-    expiresIn: options?.expiresIn || 3600,
-  });
+  return signedUrl;
 }
 
 export async function r2DownloadFile(
@@ -30,23 +27,23 @@ export async function r2DownloadFile(
   env: Env,
 ): Promise<DownloadResult> {
   const client = createR2Client(env);
+  const bucket = client.bucket(env.GCS_BUCKET_NAME);
+  const file = bucket.file(filePath);
+  const [exists] = await file.exists();
 
-  const command = new GetObjectCommand({
-    Bucket: env.R2_BUCKET_NAME,
-    Key: filePath,
-  });
-
-  const response = await client.send(command);
-
-  if (!response.Body) {
+  if (!exists) {
     throw new Error(`File not found: ${filePath}`);
   }
 
-  const data = await response.Body.transformToByteArray();
+  const [data] = await file.download();
+  const [metadata] = await file.getMetadata();
 
   return {
-    data,
-    contentType: response.ContentType,
-    size: response.ContentLength,
+    data: Uint8Array.from(data),
+    contentType: metadata.contentType,
+    size:
+      typeof metadata.size === "string"
+        ? Number.parseInt(metadata.size, 10)
+        : metadata.size,
   };
 }

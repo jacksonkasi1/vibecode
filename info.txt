@@ -1,0 +1,35 @@
+GCS Setup Details
+
+Tech stack
+- Runtime: Bun (bun run --hot src/index.ts)
+- Server env validation: @t3-oss/env-core + zod
+- Cloud CLI: gcloud + gcloud storage
+- Storage SDK: @google-cloud/storage
+
+GCP configuration
+- Project ID: patient-lens-ai-new
+- Bucket name: vibecode
+- Bucket URI: gs://vibecode
+- Location: ASIA-SOUTH1
+- Public base URL: https://storage.googleapis.com/vibecode
+
+Credentials/auth
+- Service account key file: .secrets/gcp-service-account.json
+- App env key file: GCS_KEY_FILE=../../.secrets/gcp-service-account.json
+- Also set: GOOGLE_APPLICATION_CREDENTIALS=../../.secrets/gcp-service-account.json
+
+Code/config locations
+- apps/server/src/config/env.ts
+- packages/storage/src/client.ts
+- packages/storage/src/upload.ts
+- apps/server/.env
+
+Environment variables added
+- GCS_PROJECT_ID=patient-lens-ai-new
+- GCS_BUCKET_NAME=vibecode
+- GCS_KEY_FILE=../../.secrets/gcp-service-account.json
+- GCS_PUBLIC_URL=https://storage.googleapis.com/vibecode
+
+Verification
+- Server starts without env validation errors.
+- Bucket verified with: gcloud storage buckets describe gs://vibecode

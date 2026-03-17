@@ -94,9 +94,21 @@ export function getWorkspaceTools(workspaceDir: string): ExecutableTool[] {
       },
       execute: async (args: Record<string, unknown>) => {
         try {
-          const { stdout, stderr } = await execAsync(args.command as string, {
+          const command = String(args.command || "").trim();
+          if (!command) return "Command failed: empty command.";
+
+          const isLongRunningCommand =
+            /(vite\s+dev|npm\s+run\s+dev|bun\s+run\s+dev|next\s+dev|python\s+-m\s+http\.server|serve\s+-s)/i.test(
+              command,
+            );
+
+          if (isLongRunningCommand) {
+            return "Command blocked: long-running dev servers are not supported in execute_command. Run a non-blocking verification command instead (for example: ls, pwd, file checks, or build/test commands).";
+          }
+
+          const { stdout, stderr } = await execAsync(command, {
             cwd: workspaceDir,
-            timeout: 30000, // 30s timeout
+            timeout: 15000,
           });
 
           let output = "";

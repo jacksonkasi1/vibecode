@@ -44,12 +44,32 @@ export default function Project() {
   const { id: projectId = "" } = useParams();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
-  const { project, workspace, executions, artifacts, isLoading } =
+  const { project, workspace, threads, executions, artifacts, isLoading } =
     useProjectData(projectId);
-  const { renameProject, runPrompt, isPromptRunning } = useProjectActions({
+  const {
+    renameProject,
+    runPrompt,
+    isPromptRunning,
+    cancelPrompt,
+    undoToPrompt,
+  } = useProjectActions({
     projectId,
     workspaceId: workspace?.id,
   });
+
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+
+  // Automatically select latest thread on load
+  useEffect(() => {
+    if (threads.length > 0 && !activeThreadId) {
+      setActiveThreadId(threads[0].id);
+    }
+  }, [threads, activeThreadId]);
+
+  const activeExecutions = useMemo(() => {
+    if (!activeThreadId) return [];
+    return executions.filter((exec) => exec.threadId === activeThreadId);
+  }, [executions, activeThreadId]);
 
   const { data: modelsRes } = useQuery({
     queryKey: ["models"],
@@ -60,10 +80,10 @@ export default function Project() {
 
   const isAnyExecutionRunning = useMemo(
     () =>
-      executions.some(
+      activeExecutions.some(
         (exec) => exec.status === "queued" || exec.status === "running",
       ),
-    [executions],
+    [activeExecutions],
   );
 
   const [isAssistantPanelOpen, setIsAssistantPanelOpen] = useState(true);
@@ -75,8 +95,8 @@ export default function Project() {
   const [editorFontSize, setEditorFontSize] = useState(13);
 
   const latestExecution = useMemo(
-    () => executions[executions.length - 1],
-    [executions],
+    () => activeExecutions[activeExecutions.length - 1],
+    [activeExecutions],
   );
   const editorTheme = resolvedTheme === "light" ? "vs" : "vs-dark";
 
@@ -179,7 +199,7 @@ export default function Project() {
           <aside
             className={`flex flex-col border-r border-border/40 bg-card/40 transition-all duration-300 ease-in-out ${isAssistantPanelOpen ? "w-[380px]" : "w-0 overflow-hidden border-transparent"}`}
           >
-            <div className="h-12 flex items-center justify-between px-3 border-b border-border/40">
+            <div className="h-[38px] flex items-center justify-between px-3 border-b border-border/40">
               <div className="flex items-center gap-2">
                 <Link
                   to="/apps"
@@ -212,15 +232,23 @@ export default function Project() {
             </div>
             <div className="flex-1 min-h-0">
               <VibeAssistantThread
-                executions={executions}
+                executions={activeExecutions}
+                threads={threads}
+                activeThreadId={activeThreadId}
+                onSelectThread={setActiveThreadId}
                 onSendPrompt={(prompt, modelId) =>
-                  runPrompt({ prompt, modelId })
+                  runPrompt({
+                    prompt,
+                    modelId,
+                    threadId: activeThreadId || undefined,
+                  })
                 }
                 isSending={isPromptRunning || isAnyExecutionRunning}
                 models={models}
                 runningModelId={
                   isAnyExecutionRunning ? latestExecution?.modelId : undefined
                 }
+                onUndoToMessage={(execId) => undoToPrompt(execId)}
               />
             </div>
           </aside>
@@ -228,23 +256,23 @@ export default function Project() {
           {/* Main Workspace */}
           <main className="flex-1 flex flex-col min-w-0 bg-background">
             {/* Toolbar */}
-            <header className="h-12 border-b border-border/40 bg-card/40 flex items-center justify-between px-4 z-10 shadow-sm">
-              <div className="flex items-center gap-3">
+            <header className="h-[38px] border-b border-border/40 bg-card/40 flex items-center justify-between px-3 z-10 shadow-sm">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setIsAssistantPanelOpen(!isAssistantPanelOpen)}
-                  className="p-1.5 hover:bg-secondary/50 rounded-md transition-all active:scale-95"
+                  className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-all active:scale-95"
                   title="Toggle Assistant"
                 >
                   <PanelLeft
-                    className={`size-4 transition-colors ${isAssistantPanelOpen ? "text-primary" : "text-muted-foreground"}`}
+                    className={`size-3.5 transition-colors ${isAssistantPanelOpen ? "text-primary" : "text-muted-foreground"}`}
                   />
                 </button>
-                <div className="flex items-center bg-secondary/30 rounded-lg p-0.5 border border-border/40">
+                <div className="flex items-center bg-secondary/30 rounded-md p-0.5 border border-border/40 mx-1">
                   <button
                     type="button"
                     onClick={() => setWorkspaceTab("app")}
                     className={[
-                      "px-3 py-1 text-[11px] font-semibold rounded-md border transition-all",
+                      "px-2.5 py-0.5 text-[11px] font-semibold rounded-[4px] border transition-all h-6",
                       workspaceTab === "app"
                         ? "bg-background text-foreground border-border/50"
                         : "border-transparent text-muted-foreground hover:text-foreground",
@@ -256,7 +284,7 @@ export default function Project() {
                     type="button"
                     onClick={() => setWorkspaceTab("code")}
                     className={[
-                      "px-3 py-1 text-[11px] font-semibold rounded-md border transition-all",
+                      "px-2.5 py-0.5 text-[11px] font-semibold rounded-[4px] border transition-all h-6",
                       workspaceTab === "code"
                         ? "bg-background text-foreground border-border/50"
                         : "border-transparent text-muted-foreground hover:text-foreground",
@@ -265,29 +293,29 @@ export default function Project() {
                     Code
                   </button>
                 </div>
-                <button className="p-1.5 hover:bg-secondary/50 rounded-md transition-colors">
-                  <Plus className="size-4 text-muted-foreground" />
+                <button className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-colors">
+                  <Plus className="size-3.5 text-muted-foreground" />
                 </button>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 mr-2">
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center mr-1">
                   {latestExecution?.status === "running" ||
                   latestExecution?.status === "queued" ? (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-bold uppercase tracking-wider animate-pulse border border-amber-500/20">
+                    <span className="flex items-center gap-1.5 px-2 h-6 rounded-full bg-amber-500/10 text-amber-500 text-[9px] font-bold uppercase tracking-wider animate-pulse border border-amber-500/20">
                       <Loader2 className="size-3 animate-spin" /> running
                     </span>
                   ) : null}
                 </div>
-                <button className="p-1.5 hover:bg-secondary/50 rounded-md transition-colors">
-                  <Github className="size-4 text-muted-foreground" />
+                <button className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-colors">
+                  <Github className="size-3.5 text-muted-foreground" />
                 </button>
-                <div className="h-4 w-px bg-border/40 mx-1" />
-                <button className="flex items-center gap-1.5 px-4 py-1.5 bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98] rounded-md text-[11px] font-bold transition-all shadow-lg shadow-primary/20 border border-primary/50">
+                <div className="h-4 w-px bg-border/40 mx-0.5" />
+                <button className="flex items-center gap-1.5 px-3 h-7 bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98] rounded-md text-[11px] font-bold transition-all shadow-sm border border-primary/50">
                   <Globe className="size-3.5" /> Deploy
                 </button>
-                <button className="p-1.5 hover:bg-secondary/50 rounded-md transition-colors">
-                  <MoreHorizontal className="size-4 text-muted-foreground" />
+                <button className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-colors">
+                  <MoreHorizontal className="size-3.5 text-muted-foreground" />
                 </button>
               </div>
             </header>
@@ -297,7 +325,7 @@ export default function Project() {
               {/* Explorer */}
               {workspaceTab === "code" ? (
                 <div className="w-56 border-r border-border/40 bg-card/30 flex flex-col">
-                  <div className="h-9 flex items-center justify-between px-4 border-b border-border/40 text-[10px] uppercase font-bold text-muted-foreground tracking-widest bg-muted/20">
+                  <div className="h-[32px] flex items-center justify-between px-4 border-b border-border/40 text-[10px] uppercase font-bold text-muted-foreground tracking-widest bg-muted/20">
                     Explorer
                     <RotateCw
                       onClick={handleRefresh}
@@ -353,7 +381,7 @@ export default function Project() {
                   </div>
                 ) : (
                   <>
-                    <div className="h-9 flex items-center bg-card/30 px-1 border-b border-border/40 gap-0.5">
+                    <div className="h-[32px] flex items-center bg-card/30 px-1 border-b border-border/40 gap-0.5">
                       {selectedFile ? (
                         <div className="h-full flex items-center gap-2.5 px-4 bg-card border-t-2 border-primary text-[11px] font-bold text-foreground animate-in slide-in-from-top-1 duration-300">
                           <FileCode className="size-3.5 text-primary" />
@@ -444,7 +472,7 @@ export default function Project() {
 
             {/* Terminal Area */}
             <footer className="h-48 border-t border-border/40 bg-card/20 flex flex-col z-20">
-              <div className="h-9 flex items-center px-4 border-b border-border/40 gap-6 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
+              <div className="h-[32px] flex items-center px-4 border-b border-border/40 gap-6 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
                 <div className="flex items-center gap-2 text-primary border-b-2 border-primary h-full px-1">
                   <TerminalIcon className="size-3" /> Terminal
                 </div>
@@ -458,7 +486,10 @@ export default function Project() {
                 <div className="ml-auto flex items-center gap-5">
                   {(latestExecution?.status === "running" ||
                     latestExecution?.status === "queued") && (
-                    <button className="flex items-center gap-1.5 text-destructive hover:text-white hover:bg-destructive/20 px-2 py-0.5 rounded transition-all">
+                    <button
+                      onClick={() => cancelPrompt(latestExecution.id)}
+                      className="flex items-center gap-1.5 text-destructive hover:text-white hover:bg-destructive/20 px-2 py-0.5 rounded transition-all"
+                    >
                       <Square className="size-3 fill-current" /> Stop
                     </button>
                   )}

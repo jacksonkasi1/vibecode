@@ -32,7 +32,7 @@ route.post("/", async (c) => {
     if (!user) return c.json({ error: "Unauthorized" }, 401);
 
     const body = await c.req.json();
-    const { workspaceId, prompt, modelId } = body;
+    const { workspaceId, prompt, modelId, threadId: inputThreadId } = body;
 
     if (!workspaceId) return c.json({ error: "workspaceId is required" }, 400);
     if (!prompt || typeof prompt !== "string") {
@@ -51,28 +51,41 @@ route.post("/", async (c) => {
       return c.json({ error: "Workspace not found or access denied" }, 404);
     }
 
-    const [existingThread] = await db
-      .select()
-      .from(chatThread)
-      .where(
-        and(
-          eq(chatThread.workspaceId, workspaceId),
-          eq(chatThread.userId, user.id),
-        ),
-      )
-      .orderBy(desc(chatThread.updatedAt), asc(chatThread.createdAt))
-      .limit(1);
+    let threadId = inputThreadId;
+    let isNewThread = false;
 
-    const threadId = existingThread?.id ?? newId();
+    if (threadId) {
+      const [existing] = await db
+        .select()
+        .from(chatThread)
+        .where(
+          and(
+            eq(chatThread.id, threadId),
+            eq(chatThread.workspaceId, workspaceId),
+            eq(chatThread.userId, user.id),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json({ error: "Thread not found or access denied" }, 404);
+      }
+    } else {
+      threadId = newId();
+      isNewThread = true;
+    }
+
     const executionId = newId();
 
     const [created] = await db.transaction(async (tx) => {
-      if (!existingThread) {
+      if (isNewThread) {
+        // Generate a title from the prompt
+        const title = prompt.length > 40 ? prompt.substring(0, 40) + "..." : prompt;
         await tx.insert(chatThread).values({
           id: threadId,
           workspaceId,
           userId: user.id,
-          title: null,
+          title,
         });
       }
 
@@ -91,6 +104,7 @@ route.post("/", async (c) => {
           id: executionId,
           workspaceId,
           userId: user.id,
+          threadId,
           prompt,
           modelId: modelId || null,
           status: "queued",

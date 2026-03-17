@@ -1,16 +1,17 @@
 // ** import core packages
-import { S3Client } from "@aws-sdk/client-s3";
+import { Storage } from "@google-cloud/storage";
 
 // ** import types
 import type { Env } from "./types";
 
-export function createR2Client(env: Env): S3Client {
-  return new S3Client({
-    region: "auto",
-    endpoint: env.R2_ENDPOINT_URL,
-    credentials: {
-      accessKeyId: env.R2_ACCESS_KEY_ID,
-      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-    },
+export function createR2Client(env: Env): Storage {
+  const credentials = env.GCS_KEY_JSON
+    ? JSON.parse(env.GCS_KEY_JSON)
+    : undefined;
+
+  return new Storage({
+    projectId: env.GCS_PROJECT_ID,
+    keyFilename: env.GCS_KEY_FILE,
+    credentials,
   });
 }

@@ -1,6 +1,3 @@
-// ** import core packages
-import { HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
-
 // ** import utils
 import { createR2Client } from "./client";
 
@@ -17,29 +14,33 @@ export async function r2ListFiles(
   options?: ListFilesOptions,
 ): Promise<ListFilesResult> {
   const client = createR2Client(env);
+  const bucket = client.bucket(env.GCS_BUCKET_NAME);
 
-  const command = new ListObjectsV2Command({
-    Bucket: env.R2_BUCKET_NAME,
-    Prefix: options?.prefix,
-    MaxKeys: options?.maxKeys || 100,
-    ContinuationToken: options?.continuationToken,
+  const [objects, nextQuery] = await bucket.getFiles({
+    prefix: options?.prefix,
+    maxResults: options?.maxKeys || 100,
+    pageToken: options?.continuationToken,
+    autoPaginate: false,
   });
 
-  const response = await client.send(command);
-
   const files: FileObject[] =
-    response.Contents?.map((item) => ({
-      key: item.Key || "",
-      url: env.R2_PUBLIC_URL
-        ? `${env.R2_PUBLIC_URL}/${item.Key}`
-        : item.Key || "",
-      size: item.Size,
-    })) || [];
+    objects.map(
+      (item: { name: string; metadata: { size?: string | number } }) => ({
+        key: item.name,
+        url: env.GCS_PUBLIC_URL
+          ? `${env.GCS_PUBLIC_URL}/${item.name}`
+          : item.name,
+        size:
+          typeof item.metadata.size === "string"
+            ? Number.parseInt(item.metadata.size, 10)
+            : item.metadata.size,
+      }),
+    ) || [];
 
   return {
     files,
-    isTruncated: response.IsTruncated || false,
-    nextContinuationToken: response.NextContinuationToken,
+    isTruncated: Boolean(nextQuery?.pageToken),
+    nextContinuationToken: nextQuery?.pageToken,
   };
 }
 
@@ -48,31 +49,13 @@ export async function r2FileExists(
   env: Env,
 ): Promise<boolean> {
   const client = createR2Client(env);
+  const bucket = client.bucket(env.GCS_BUCKET_NAME);
 
   try {
-    const command = new HeadObjectCommand({
-      Bucket: env.R2_BUCKET_NAME,
-      Key: filePath,
-    });
-
-    await client.send(command);
+    const [exists] = await bucket.file(filePath).exists();
+    if (!exists) return false;
     return true;
-  } catch (error: unknown) {
-    // Only return false for NotFound errors
-    if (error instanceof Error && "name" in error) {
-      if (error.name === "NotFound" || error.name === "NoSuchKey") {
-        return false;
-      }
-      // Check for 404 status in AWS SDK metadata
-      if ("$metadata" in error) {
-        const metadata = (error as { $metadata?: { httpStatusCode?: number } })
-          .$metadata;
-        if (metadata?.httpStatusCode === 404) {
-          return false;
-        }
-      }
-    }
-    // Rethrow other errors (network, auth, permission issues)
+  } catch (error) {
     throw error;
   }
 }
