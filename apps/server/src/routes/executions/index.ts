@@ -9,6 +9,7 @@ import createRoute from "./create";
 import listRoute from "./list";
 import getRoute from "./get";
 import cancelRoute from "./cancel";
+import undoRoute from "./undo";
 import streamRoute from "./stream";
 
 // ** import types
@@ -24,6 +25,7 @@ executionsRouter.route("/", createRoute);
 executionsRouter.route("/", listRoute);
 executionsRouter.route("/", getRoute);
 executionsRouter.route("/", cancelRoute);
+executionsRouter.route("/", undoRoute);
 executionsRouter.route("/", streamRoute);
 
 export default executionsRouter;
