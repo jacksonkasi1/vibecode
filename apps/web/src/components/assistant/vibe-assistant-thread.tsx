@@ -278,16 +278,18 @@ function UserMessage() {
           }}
         />
       </MessagePrimitive.Root>
-      {onUndoToMessage && messageState.id.startsWith("u-") && (
-        <button
-          type="button"
-          onClick={() => onUndoToMessage(messageState.id.replace("u-", ""))}
-          className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 pointer-events-none transition-all hover:bg-secondary/70 hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto"
-          title="Revert codebase to before this prompt"
-        >
-          <Undo2 className="size-3" />
-        </button>
-      )}
+      {onUndoToMessage &&
+        messageState.id.startsWith("u-") &&
+        !(messageState.metadata as any)?.isReverted && (
+          <button
+            type="button"
+            onClick={() => onUndoToMessage(messageState.id.replace("u-", ""))}
+            className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 pointer-events-none transition-all hover:bg-secondary/70 hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto"
+            title="Revert codebase to before this prompt"
+          >
+            <Undo2 className="size-3" />
+          </button>
+        )}
     </div>
   );
 }
@@ -397,6 +399,10 @@ export function VibeAssistantThread({
   const [searchQuery, setSearchQuery] = useState("");
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(
+    new Set(),
+  );
   const historyPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -465,9 +471,17 @@ export function VibeAssistantThread({
 
     const base = {
       role: "user" as const,
-      content: [{ type: "text" as const, text: exec.prompt }],
+      content: [
+        {
+          type: "text" as const,
+          text: exec.isReverted
+            ? `~~${exec.prompt}~~ *(reverted)*`
+            : exec.prompt,
+        },
+      ],
       id: `u-${exec.id}`,
       createdAt: new Date(String(exec.createdAt)),
+      metadata: { isReverted: !!exec.isReverted },
     };
 
     if (exec.status === "failed") {
@@ -685,6 +699,20 @@ export function VibeAssistantThread({
                     <div className="flex items-center gap-3 text-muted-foreground">
                       <button
                         onClick={() => {
+                          setIsMultiSelectMode((prev) => !prev);
+                          setSelectedThreadIds(new Set());
+                        }}
+                        className={`transition-colors hover:text-foreground text-[11px] px-2 py-0.5 rounded-sm border ${
+                          isMultiSelectMode
+                            ? "bg-secondary text-foreground border-border/50"
+                            : "border-transparent"
+                        }`}
+                        title="Select Multiple"
+                      >
+                        Select
+                      </button>
+                      <button
+                        onClick={() => {
                           onSelectThread(null);
                           setIsHistoryPanelOpen(false);
                         }}
@@ -722,50 +750,77 @@ export function VibeAssistantThread({
                       <div className="flex flex-col">
                         {filteredThreads.map((thread) => {
                           const isActive = thread.id === activeThreadId;
+                          const isSelected = selectedThreadIds.has(thread.id);
 
                           return (
                             <div
                               key={thread.id}
                               className={[
                                 "group/history-item flex h-[32px] w-full cursor-pointer items-center justify-between px-3 text-left transition-colors duration-150 border-b border-border/10 last:border-0",
-                                isActive
+                                isActive && !isMultiSelectMode
                                   ? "bg-secondary/60 text-foreground"
                                   : "bg-transparent text-foreground/90 hover:bg-secondary/40",
+                                isSelected ? "bg-primary/10" : "",
                               ].join(" ")}
                               onClick={() => {
-                                onSelectThread(thread.id);
-                                setIsHistoryPanelOpen(false);
+                                if (isMultiSelectMode) {
+                                  const newSelected = new Set(
+                                    selectedThreadIds,
+                                  );
+                                  if (newSelected.has(thread.id)) {
+                                    newSelected.delete(thread.id);
+                                  } else {
+                                    newSelected.add(thread.id);
+                                  }
+                                  setSelectedThreadIds(newSelected);
+                                } else {
+                                  onSelectThread(thread.id);
+                                  setIsHistoryPanelOpen(false);
+                                }
                               }}
                             >
-                              <div className="flex min-w-0 flex-1 items-center justify-between pr-2">
-                                <span className="truncate text-[13px] font-medium text-foreground/90">
-                                  {thread.title || "Untitled Chat"}
-                                </span>
-                                <span className="text-[11px] text-muted-foreground/60 shrink-0">
-                                  {new Date(
-                                    thread.updatedAt,
-                                  ).toLocaleTimeString([], {
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
+                              <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
+                                {isMultiSelectMode && (
+                                  <div
+                                    className={`size-3.5 rounded border ${
+                                      isSelected
+                                        ? "bg-primary border-primary"
+                                        : "border-border"
+                                    }`}
+                                  />
+                                )}
+                                <div className="flex flex-1 justify-between min-w-0">
+                                  <span className="truncate text-[13px] font-medium text-foreground/90">
+                                    {thread.title || "Untitled Chat"}
+                                  </span>
+                                  <span className="text-[11px] text-muted-foreground/60 shrink-0">
+                                    {new Date(
+                                      thread.updatedAt,
+                                    ).toLocaleTimeString([], {
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                </div>
                               </div>
 
-                              <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/history-item:opacity-100">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onDeleteThread) {
-                                      onDeleteThread(thread.id);
-                                    }
-                                  }}
-                                  className="inline-flex items-center justify-center text-muted-foreground/60 transition-colors hover:text-destructive pl-1"
-                                  title="Delete chat"
-                                >
-                                  <Trash2 className="size-4" />
-                                </button>
-                              </div>
+                              {!isMultiSelectMode && (
+                                <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/history-item:opacity-100">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (onDeleteThread) {
+                                        onDeleteThread(thread.id);
+                                      }
+                                    }}
+                                    className="inline-flex items-center justify-center text-muted-foreground/60 transition-colors hover:text-destructive pl-1"
+                                    title="Delete chat"
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -780,6 +835,30 @@ export function VibeAssistantThread({
                       </div>
                     )}
                   </div>
+                  {isMultiSelectMode && selectedThreadIds.size > 0 && (
+                    <div className="border-t border-border/20 p-2 bg-background/95">
+                      <button
+                        onClick={() => {
+                          if (
+                            onDeleteThread &&
+                            window.confirm(
+                              `Are you sure you want to delete ${selectedThreadIds.size} thread(s)?`,
+                            )
+                          ) {
+                            for (const id of selectedThreadIds) {
+                              onDeleteThread(id);
+                            }
+                            setSelectedThreadIds(new Set());
+                            setIsMultiSelectMode(false);
+                          }
+                        }}
+                        className="w-full flex items-center justify-center gap-2 rounded bg-destructive text-destructive-foreground px-3 py-1.5 text-[12px] font-bold transition-all hover:bg-destructive/90"
+                      >
+                        <Trash2 className="size-3.5" />
+                        Delete {selectedThreadIds.size} Selected
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 

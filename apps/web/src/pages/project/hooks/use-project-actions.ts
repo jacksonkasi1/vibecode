@@ -12,6 +12,7 @@ import {
   cancelExecution,
   undoExecution,
 } from "@/rest-api/executions";
+import { renameThread, deleteThread } from "@/rest-api/threads";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
@@ -308,6 +309,32 @@ export function useProjectActions({
     },
   });
 
+  const renameThreadMutation = useMutation({
+    mutationFn: ({ threadId, title }: { threadId: string; title: string }) =>
+      renameThread(threadId, title),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["threads", workspaceId] });
+    },
+    onError: (error) => {
+      toast.error(
+        `Failed to rename thread: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    },
+  });
+
+  const deleteThreadMutation = useMutation({
+    mutationFn: (threadId: string) => deleteThread(threadId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["threads", workspaceId] });
+      toast.success("Thread deleted");
+    },
+    onError: (error) => {
+      toast.error(
+        `Failed to delete thread: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    },
+  });
+
   return {
     renameProject: renameProjectMutation.mutate,
     isRenaming: renameProjectMutation.isPending,
@@ -317,5 +344,7 @@ export function useProjectActions({
     isUndoing: undoPromptMutation.isPending,
     cancelPrompt: cancelPromptMutation.mutate,
     isCanceling: cancelPromptMutation.isPending,
+    renameThread: renameThreadMutation.mutate,
+    deleteThread: deleteThreadMutation.mutate,
   };
 }
