@@ -534,7 +534,7 @@ export function VibeAssistantThread({
               <div className="sticky top-0 z-20 h-[32px] border-b border-border/40 bg-background/95 px-2 backdrop-blur-xl flex items-center justify-between">
                 <div className="group/chips flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto pr-2 scrollbar-none [mask-image:linear-gradient(to_right,black_90%,transparent_100%)]">
                   {threads.length === 0 ? (
-                    <div className="px-2 text-[12px] font-medium italic text-muted-foreground/60">
+                    <div className="px-2 text-[11px] font-medium italic text-muted-foreground/60">
                       No active chats
                     </div>
                   ) : (
@@ -567,7 +567,7 @@ export function VibeAssistantThread({
                             }
                           }}
                           className={[
-                            "thread-chip group relative flex h-[28px] items-center gap-1.5 whitespace-nowrap rounded-[6px] px-2.5 text-[12px] font-medium transition-all duration-200 ease-out focus-visible:outline-none",
+                            "thread-chip group relative flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-[5px] px-2.5 text-[11px] font-medium transition-all duration-200 ease-out focus-visible:outline-none",
                             isActive
                               ? "bg-secondary text-foreground"
                               : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
@@ -588,7 +588,7 @@ export function VibeAssistantThread({
                                 e.stopPropagation();
                               }}
                               onClick={(e) => e.stopPropagation()}
-                              className="max-w-[140px] min-w-[60px] bg-transparent outline-none border-b border-foreground/30 text-[12px] font-medium text-foreground px-0.5 -mx-0.5"
+                              className="max-w-[140px] min-w-[60px] bg-transparent outline-none border-b border-foreground/30 text-[11px] font-medium text-foreground px-0.5 -mx-0.5"
                             />
                           ) : (
                             <span
@@ -611,7 +611,7 @@ export function VibeAssistantThread({
                                 event.stopPropagation();
                                 onSelectThread(null);
                               }}
-                              className="-mr-1 ml-0.5 inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+                              className="-mr-1 ml-0.5 inline-flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[4px] text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
                               title="Close tab"
                               aria-label="Close active chat tab"
                             >
@@ -631,7 +631,7 @@ export function VibeAssistantThread({
                       setIsHistoryPanelOpen((previousState) => !previousState)
                     }
                     className={[
-                      "inline-flex h-[28px] w-[28px] items-center justify-center rounded-[6px] transition-all duration-200",
+                      "inline-flex h-[26px] w-[26px] items-center justify-center rounded-[5px] transition-all duration-200",
                       isHistoryPanelOpen
                         ? "bg-secondary text-foreground"
                         : "bg-transparent text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
@@ -648,7 +648,7 @@ export function VibeAssistantThread({
                       onSelectThread(null);
                       setIsHistoryPanelOpen(false);
                     }}
-                    className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-[6px] bg-transparent text-muted-foreground transition-all duration-200 hover:bg-secondary/50 hover:text-foreground active:scale-95"
+                    className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[5px] bg-transparent text-muted-foreground transition-all duration-200 hover:bg-secondary/50 hover:text-foreground active:scale-95"
                     title="New Chat"
                     aria-label="Create new chat"
                   >
@@ -661,7 +661,14 @@ export function VibeAssistantThread({
               {isHistoryPanelOpen && (
                 <div
                   ref={historyPanelRef}
-                  className="absolute inset-0 z-30 flex flex-col bg-background animate-in fade-in duration-200"
+                  className="absolute z-30 flex flex-col bg-background animate-in fade-in duration-200"
+                  style={{
+                    position: "absolute",
+                    top: "32px",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                  }}
                 >
                   <div className="flex h-[32px] items-center justify-between border-b border-border/20 px-3">
                     <div className="flex items-center gap-2">
@@ -814,8 +821,12 @@ export function VibeAssistantThread({
               </div>
             </ThreadPrimitive.Viewport>
 
-            <div className="border-t border-border/50 bg-background/80 p-3">
-              <ComposerPrimitive.Root className="relative flex w-full flex-col gap-2 rounded-[14px] border border-input bg-card p-3 shadow-sm transition-all focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/20">
+            <div className="relative mx-[2px] my-[2px] bg-background/45 p-px">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-background/55 via-background/30 via-60% to-transparent"
+              />
+              <ComposerPrimitive.Root className="relative mb-[2px] flex w-full flex-col gap-2 rounded-[10px] border border-border/35 bg-card/95 p-3 transition-all focus-within:border-ring/40 focus-within:ring-[0.5px] focus-within:ring-ring/15">
                 <ComposerAttachments />
 
                 <ComposerPrimitive.Input
