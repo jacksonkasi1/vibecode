@@ -52,7 +52,11 @@ export function useProjectData(projectId: string) {
     );
   }, [executionsRes?.data]);
 
-  const latestExecutionId = executions[executions.length - 1]?.id;
+  const activeExecutions = useMemo(() => {
+    return executions.filter((e) => !e.isReverted);
+  }, [executions]);
+
+  const latestExecutionId = activeExecutions[activeExecutions.length - 1]?.id;
 
   // 5. Fetch Artifacts
   const { data: artifactsRes, isLoading: isArtifactsLoading } = useQuery({

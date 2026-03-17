@@ -6,7 +6,8 @@ import path from "node:path";
 
 // ** import lib
 import { db } from "@repo/db";
-import { execution, workspace, eq, and } from "@repo/db";
+import { execution, workspace, workspaceOperation, eq, and } from "@repo/db";
+import { newId } from "@repo/db";
 import { logger } from "@repo/logs";
 
 // ** import config
@@ -35,27 +36,68 @@ route.post("/:id/undo", async (c) => {
     if (!found) return c.json({ error: "Execution not found" }, 404);
 
     const execRecord = found.execution;
-    const workspacePath = path.join(env.WORKSPACE_DIR || "/tmp/vibecode-workspaces", execRecord.workspaceId);
+    if (execRecord.isReverted) {
+      return c.json({ error: "Execution already reverted" }, 400);
+    }
 
-    // Find the merge commit for this execution
-    const { stdout: commitsLog } = await execAsync(`git log --grep="Merge execution ${id}" --format="%H" -n 1`, { cwd: workspacePath }).catch(() => ({ stdout: "" }));
-    
-    const targetCommitHash = commitsLog.trim();
-    
+    const workspacePath = path.join(
+      env.WORKSPACE_DIR || "/tmp/vibecode-workspaces",
+      execRecord.workspaceId,
+    );
+
+    const targetCommitHash = execRecord.mergedCommitHash;
+
     if (targetCommitHash) {
       // Revert the merge commit securely (-m 1 means keep the mainline parent)
-      await withWorkspaceLock(env.WORKSPACE_DIR || "/tmp/vibecode-workspaces", execRecord.workspaceId, async () => {
-        try {
-          await execAsync(`git revert -m 1 ${targetCommitHash} --no-edit`, { cwd: workspacePath });
-          logger.info(`Workspace ${execRecord.workspaceId} reverted execution ${id} via git revert`);
-        } catch (error) {
-          await execAsync(`git revert --abort`, { cwd: workspacePath }).catch(() => {});
-          throw new Error(`Revert failed due to conflicts: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      });
+      await withWorkspaceLock(
+        env.WORKSPACE_DIR || "/tmp/vibecode-workspaces",
+        execRecord.workspaceId,
+        async () => {
+          try {
+            await execAsync(`git revert -m 1 ${targetCommitHash} --no-edit`, {
+              cwd: workspacePath,
+            });
+            logger.info(
+              `Workspace ${execRecord.workspaceId} reverted execution ${id} via git revert`,
+            );
+          } catch (error) {
+            await execAsync(`git revert --abort`, { cwd: workspacePath }).catch(
+              () => {},
+            );
+            throw new Error(
+              `Revert failed due to conflicts: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        },
+      );
     } else {
-      logger.warn(`Could not find git merge commit for execution ${id}`);
+      logger.warn(
+        `Could not find git merge commit for execution ${id}, marking reverted anyway.`,
+      );
     }
+
+    // Mark as reverted and create audit log in DB
+    await db.transaction(async (tx) => {
+      await tx
+        .update(execution)
+        .set({
+          isReverted: true,
+          revertedAt: new Date(),
+        })
+        .where(eq(execution.id, id));
+
+      await tx.insert(workspaceOperation).values({
+        id: newId(),
+        workspaceId: execRecord.workspaceId,
+        executionId: id,
+        userId: user.id,
+        operation: "revert",
+        details: JSON.stringify({
+          commitHashReverted: targetCommitHash,
+          reason: "User requested undo",
+        }),
+      });
+    });
 
     return c.json({ data: { success: true } });
   } catch (error) {

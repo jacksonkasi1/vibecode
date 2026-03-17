@@ -16,6 +16,7 @@ import {
   eq,
   execution,
   executionEvent,
+  workspaceRevision,
 } from "@repo/db";
 import { newId } from "@repo/db";
 import { logger } from "@repo/logs";
@@ -258,27 +259,31 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
     const execAsync = promisify(exec);
 
     // Ensure main workspace is a valid git repo before branching
-    await withWorkspaceLock(env.WORKSPACE_DIR, execRecord.workspaceId, async () => {
-      try {
-        const isRepo = await stat(path.join(workspacePath, ".git")).catch(
-          () => null,
-        );
-        if (!isRepo) {
-          await execAsync(`git init`, { cwd: workspacePath });
-          await execAsync(`git config user.name "VIBECode System"`, {
-            cwd: workspacePath,
-          });
-          await execAsync(`git config user.email "system@vibecode.app"`, {
-            cwd: workspacePath,
-          });
-          await execAsync(`git commit --allow-empty -m "Initial commit"`, {
-            cwd: workspacePath,
-          });
+    await withWorkspaceLock(
+      env.WORKSPACE_DIR,
+      execRecord.workspaceId,
+      async () => {
+        try {
+          const isRepo = await stat(path.join(workspacePath, ".git")).catch(
+            () => null,
+          );
+          if (!isRepo) {
+            await execAsync(`git init`, { cwd: workspacePath });
+            await execAsync(`git config user.name "VIBECode System"`, {
+              cwd: workspacePath,
+            });
+            await execAsync(`git config user.email "system@vibecode.app"`, {
+              cwd: workspacePath,
+            });
+            await execAsync(`git commit --allow-empty -m "Initial commit"`, {
+              cwd: workspacePath,
+            });
+          }
+        } catch (err) {
+          logger.warn(`Failed to init git in workspace: ${err}`);
         }
-      } catch (err) {
-        logger.warn(`Failed to init git in workspace: ${err}`);
-      }
-    });
+      },
+    );
 
     // Setup Git Worktree for this specific execution
     const worktreeDir = path.join(
@@ -291,15 +296,19 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
 
     await mkdir(path.dirname(worktreeDir), { recursive: true });
 
-    await withWorkspaceLock(env.WORKSPACE_DIR, execRecord.workspaceId, async () => {
-      try {
-        await execAsync(`git worktree add -b ${branchName} ${worktreeDir}`, {
-          cwd: workspacePath,
-        });
-      } catch (err) {
-        throw new Error(`Failed to create git worktree: ${err}`);
-      }
-    });
+    await withWorkspaceLock(
+      env.WORKSPACE_DIR,
+      execRecord.workspaceId,
+      async () => {
+        try {
+          await execAsync(`git worktree add -b ${branchName} ${worktreeDir}`, {
+            cwd: workspacePath,
+          });
+        } catch (err) {
+          throw new Error(`Failed to create git worktree: ${err}`);
+        }
+      },
+    );
 
     try {
       await execAsync(`git config user.name "VIBECode Agent"`, {
@@ -516,6 +525,8 @@ Think step-by-step and complete the objective.`;
 
     let mergeError = "";
 
+    let mergedCommitHash = "";
+
     // If we finished successfully, commit the worktree and merge it back to the main workspace
     if (!isCancelled) {
       try {
@@ -530,28 +541,42 @@ Think step-by-step and complete the objective.`;
             { cwd: worktreeDir },
           );
 
-          await withWorkspaceLock(env.WORKSPACE_DIR, execRecord.workspaceId, async () => {
-            try {
-              // Standard merge. If two agents touch the same lines, we WANT this to fail
-              // with a conflict rather than blindly overwriting code via `-X ours`.
-              await execAsync(
-                `git merge ${branchName} --no-ff -m "Merge execution ${execRecord.id}"`,
-                { cwd: workspacePath },
-              );
-            } catch (err) {
-              logger.warn(
-                `Merge failed for execution ${execRecord.id}, conflicts detected: ${err}`,
-              );
-              // If the merge failed with conflicts, we explicitly abort the merge to keep the mainline clean.
-              // The user's AI code is preserved safely in the branch ${branchName}.
-              await execAsync(`git merge --abort`, { cwd: workspacePath }).catch(
-                () => {},
-              );
-              mergeError = `Merge conflict with another parallel agent. The agent's work was saved to branch ${branchName} but could not be automatically merged into main.`;
-            }
-          });
+          await withWorkspaceLock(
+            env.WORKSPACE_DIR,
+            execRecord.workspaceId,
+            async () => {
+              try {
+                // Standard merge. If two agents touch the same lines, we WANT this to fail
+                // with a conflict rather than blindly overwriting code via `-X ours`.
+                await execAsync(
+                  `git merge ${branchName} --no-ff -m "Merge execution ${execRecord.id}"`,
+                  { cwd: workspacePath },
+                );
+
+                const { stdout: hashOut } = await execAsync(
+                  `git log -1 --format="%H"`,
+                  {
+                    cwd: workspacePath,
+                  },
+                );
+                mergedCommitHash = hashOut.trim();
+              } catch (err) {
+                logger.warn(
+                  `Merge failed for execution ${execRecord.id}, conflicts detected: ${err}`,
+                );
+                // If the merge failed with conflicts, we explicitly abort the merge to keep the mainline clean.
+                // The user's AI code is preserved safely in the branch ${branchName}.
+                await execAsync(`git merge --abort`, {
+                  cwd: workspacePath,
+                }).catch(() => {});
+                mergeError = `Merge conflict with another parallel agent. The agent's work was saved to branch ${branchName} but could not be automatically merged into main.`;
+              }
+            },
+          );
         } else {
-          logger.info(`Agent ${execRecord.id} made no file changes. Skipping merge.`);
+          logger.info(
+            `Agent ${execRecord.id} made no file changes. Skipping merge.`,
+          );
         }
       } catch (err) {
         logger.warn(`Failed to process worktree git commit: ${err}`);
@@ -572,36 +597,56 @@ Think step-by-step and complete the objective.`;
     );
 
     // Cleanup the worktree
-    await withWorkspaceLock(env.WORKSPACE_DIR, execRecord.workspaceId, async () => {
-      try {
-        await execAsync(`git worktree remove --force ${worktreeDir}`, {
-          cwd: workspacePath,
-        }).catch(() => {});
-        // Only delete the branch if we successfully merged and weren't cancelled
-        if (!mergeError && !isCancelled) {
-          await execAsync(`git branch -D ${branchName}`, {
+    await withWorkspaceLock(
+      env.WORKSPACE_DIR,
+      execRecord.workspaceId,
+      async () => {
+        try {
+          await execAsync(`git worktree remove --force ${worktreeDir}`, {
             cwd: workspacePath,
           }).catch(() => {});
+          // Only delete the branch if we successfully merged and weren't cancelled
+          if (!mergeError && !isCancelled) {
+            await execAsync(`git branch -D ${branchName}`, {
+              cwd: workspacePath,
+            }).catch(() => {});
+          }
+          await execAsync(`git worktree prune`, { cwd: workspacePath }).catch(
+            () => {},
+          );
+        } catch (err) {
+          logger.warn(`Failed to cleanup worktree: ${err}`);
         }
-        await execAsync(`git worktree prune`, { cwd: workspacePath }).catch(() => {});
-      } catch (err) {
-        logger.warn(`Failed to cleanup worktree: ${err}`);
-      }
-    });
+      },
+    );
 
     if (mergeError) {
       throw new Error(mergeError);
     }
 
     await db.transaction(async (tx) => {
-      await tx
-        .update(execution)
-        .set({
-          status: "completed",
-          result: resultPayload,
-          completedAt: new Date(),
-        })
-        .where(eq(execution.id, execRecord.id));
+      // Avoid overwriting 'cancelled' or 'failed' status with 'completed'
+      if (!isCancelled) {
+        await tx
+          .update(execution)
+          .set({
+            status: "completed",
+            result: resultPayload,
+            completedAt: new Date(),
+            mergedCommitHash: mergedCommitHash || null,
+            worktreeBranch: branchName,
+          })
+          .where(eq(execution.id, execRecord.id));
+      } else {
+        await tx
+          .update(execution)
+          .set({
+            result: resultPayload,
+            completedAt: new Date(),
+            worktreeBranch: branchName,
+          })
+          .where(eq(execution.id, execRecord.id));
+      }
 
       await tx.insert(chatMessage).values({
         id: newId(),
@@ -632,19 +677,46 @@ Think step-by-step and complete the objective.`;
         }),
       });
 
-      if (synthesizedArtifacts.length > 0) {
+      if (synthesizedArtifacts.length > 0 && !isCancelled) {
         await tx.insert(artifact).values(synthesizedArtifacts);
+      }
+
+      if (!isCancelled && mergedCommitHash) {
+        // Find parent hash
+        let parentHash = null;
+        try {
+          const { stdout: parentOut } = await execAsync(
+            `git log -1 --format="%P"`,
+            {
+              cwd: workspacePath,
+            },
+          );
+          const parents = parentOut.trim().split(" ");
+          parentHash = parents[0] || null;
+        } catch (e) {}
+
+        await tx.insert(workspaceRevision).values({
+          id: newId(),
+          workspaceId: execRecord.workspaceId,
+          executionId: execRecord.id,
+          commitHash: mergedCommitHash,
+          parentHash,
+          createdBy: execRecord.userId,
+        });
       }
     });
 
-    await appendExecutionEvent(execRecord.id, "status", {
-      status: "completed",
-      completedAt: new Date().toISOString(),
-      usage: finalUsage,
-      steps: step,
-    });
-
-    logger.info(`Execution ${execRecord.id} completed successfully.`);
+    if (!isCancelled) {
+      await appendExecutionEvent(execRecord.id, "status", {
+        status: "completed",
+        completedAt: new Date().toISOString(),
+        usage: finalUsage,
+        steps: step,
+      });
+      logger.info(`Execution ${execRecord.id} completed successfully.`);
+    } else {
+      logger.info(`Execution ${execRecord.id} was cancelled gracefully.`);
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(`Execution ${execRecord.id} failed: ${errorMessage}`);
