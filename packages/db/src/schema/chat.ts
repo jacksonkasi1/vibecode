@@ -28,6 +28,8 @@ export const chatThread = pgTable(
     title: text("title"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+    archivedAt: timestamp("archived_at"),
   },
   (table) => ({
     workspaceUpdatedAtIdx: index("chat_thread_workspace_id_updated_at_idx").on(
