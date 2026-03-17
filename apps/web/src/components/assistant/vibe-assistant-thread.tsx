@@ -833,7 +833,7 @@ export function VibeAssistantThread({
                   rows={1}
                   autoFocus
                   placeholder="Ask Vibe anything..."
-                  className="max-h-44 min-h-[44px] w-full resize-none bg-transparent px-2 py-2 text-[14px] leading-relaxed placeholder:text-muted-foreground focus:outline-none"
+                  className="h-auto min-h-[44px] max-h-[112px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[14px] leading-relaxed placeholder:text-muted-foreground focus:outline-none"
                   disabled={isSending}
                 />
 
