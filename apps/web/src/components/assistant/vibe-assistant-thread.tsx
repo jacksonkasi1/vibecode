@@ -265,13 +265,13 @@ function UserMessage() {
   const { onUndoToMessage } = useContext(ThreadActionContext);
 
   return (
-    <div className="relative group flex items-start w-full">
-      <MessagePrimitive.Root className="w-full rounded-xl border border-border/70 bg-card/70 px-4 py-3 text-[15px] font-medium text-foreground/95">
+    <div className="group flex w-full flex-col items-end">
+      <MessagePrimitive.Root className="w-fit max-w-[78%] rounded-[22px] bg-muted/55 px-3.5 py-2 text-[14px] font-normal text-foreground/95">
         <UserMessageAttachments />
         <MessagePrimitive.Parts
           components={{
             Text: () => (
-              <p className="whitespace-pre-wrap text-foreground">
+              <p className="whitespace-pre-wrap break-words leading-6 text-foreground/95">
                 <MessagePartPrimitive.Text />
               </p>
             ),
@@ -282,10 +282,10 @@ function UserMessage() {
         <button
           type="button"
           onClick={() => onUndoToMessage(messageState.id.replace("u-", ""))}
-          className="ml-2 mt-2 opacity-0 group-hover:opacity-100 p-1.5 hover:bg-secondary/80 rounded-md transition-all border border-border/40 shrink-0"
+          className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 pointer-events-none transition-all hover:bg-secondary/70 hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto"
           title="Revert codebase to before this prompt"
         >
-          <Undo2 className="size-3.5 text-muted-foreground hover:text-foreground" />
+          <Undo2 className="size-3" />
         </button>
       )}
     </div>
