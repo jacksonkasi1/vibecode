@@ -1,5 +1,11 @@
 // ** import core packages
-import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  integer,
+  timestamp,
+  boolean,
+} from "drizzle-orm/pg-core";
 
 // ** import schema
 import { execution } from "./executions";
@@ -25,6 +31,8 @@ export const artifact = pgTable("artifact", {
   mimeType: text("mime_type"),
   sizeBytes: integer("size_bytes"),
   metadata: text("metadata"), // JSON stringified
+  isActive: boolean("is_active").notNull().default(true),
+  supersededByExecutionId: text("superseded_by_execution_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
