@@ -3,7 +3,15 @@ import { Hono } from "hono";
 
 // ** import lib
 import { db } from "@repo/db";
-import { chatThread, workspace, project, eq, and, desc } from "@repo/db";
+import {
+  chatThread,
+  workspace,
+  project,
+  eq,
+  and,
+  desc,
+  isNull,
+} from "@repo/db";
 import { logger } from "@repo/logs";
 
 // ** import types
@@ -37,7 +45,12 @@ route.get("/", async (c) => {
     const threads = await db
       .select()
       .from(chatThread)
-      .where(eq(chatThread.workspaceId, workspaceId))
+      .where(
+        and(
+          eq(chatThread.workspaceId, workspaceId),
+          isNull(chatThread.deletedAt),
+        ),
+      )
       .orderBy(desc(chatThread.updatedAt));
 
     return c.json({ data: threads });

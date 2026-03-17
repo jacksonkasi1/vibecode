@@ -57,6 +57,8 @@ export default function Project() {
     isPromptRunning,
     cancelPrompt,
     undoToPrompt,
+    renameThread,
+    deleteThread,
   } = useProjectActions({
     projectId,
     workspaceId: workspace?.id,
@@ -309,7 +311,19 @@ export default function Project() {
                 runningModelId={
                   isAnyExecutionRunning ? latestExecution?.modelId : undefined
                 }
-                onUndoToMessage={(execId) => undoToPrompt(execId)}
+                onUndoToMessage={(execId) => {
+                  if (
+                    window.confirm(
+                      "Are you sure you want to revert the codebase to before this prompt? This action will undo all code changes made by this prompt and any subsequent prompts. You can still view them in history.",
+                    )
+                  ) {
+                    undoToPrompt(execId);
+                  }
+                }}
+                onRenameThread={(threadId, title) =>
+                  renameThread({ threadId, title })
+                }
+                onDeleteThread={(threadId) => deleteThread(threadId)}
               />
             </div>
           </aside>
