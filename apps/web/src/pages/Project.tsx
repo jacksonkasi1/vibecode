@@ -23,7 +23,7 @@ import {
   RotateCw,
   Loader2,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
@@ -41,6 +41,11 @@ import { useProjectData } from "@/pages/project/hooks/use-project-data";
 import { getModels } from "@/rest-api/models";
 
 export default function Project() {
+  const ASSISTANT_PANEL_WIDTH_KEY = "project-assistant-panel-width";
+  const DEFAULT_ASSISTANT_PANEL_WIDTH = 380;
+  const MIN_ASSISTANT_PANEL_WIDTH = 300;
+  const MAX_ASSISTANT_PANEL_WIDTH = 560;
+
   const { id: projectId = "" } = useParams();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
@@ -87,12 +92,18 @@ export default function Project() {
   );
 
   const [isAssistantPanelOpen, setIsAssistantPanelOpen] = useState(true);
+  const [assistantPanelWidth, setAssistantPanelWidth] = useState(
+    DEFAULT_ASSISTANT_PANEL_WIDTH,
+  );
+  const [isResizingAssistantPanel, setIsResizingAssistantPanel] =
+    useState(false);
   const [localProjectName, setLocalProjectName] = useState("");
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
   const [selectedFile, setSelectedFile] = useState<Artifact | null>(null);
   const [workspaceTab, setWorkspaceTab] = useState<"app" | "code">("code");
   const [editorWordWrap, setEditorWordWrap] = useState(false);
   const [editorFontSize, setEditorFontSize] = useState(13);
+  const splitLayoutRef = useRef<HTMLDivElement | null>(null);
 
   const latestExecution = useMemo(
     () => activeExecutions[activeExecutions.length - 1],
@@ -153,6 +164,26 @@ export default function Project() {
       setLocalProjectName(project.name);
   }, [project, isEditingProjectName]);
 
+  useEffect(() => {
+    const storedWidth = window.localStorage.getItem(ASSISTANT_PANEL_WIDTH_KEY);
+    if (!storedWidth) return;
+    const parsedWidth = Number.parseInt(storedWidth, 10);
+    if (Number.isNaN(parsedWidth)) return;
+    setAssistantPanelWidth(
+      Math.min(
+        MAX_ASSISTANT_PANEL_WIDTH,
+        Math.max(MIN_ASSISTANT_PANEL_WIDTH, parsedWidth),
+      ),
+    );
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      ASSISTANT_PANEL_WIDTH_KEY,
+      String(assistantPanelWidth),
+    );
+  }, [assistantPanelWidth]);
+
   // Set default selected file
   useEffect(() => {
     if (artifacts.length > 0 && !selectedFile) {
@@ -184,6 +215,34 @@ export default function Project() {
     queryClient.invalidateQueries({ queryKey: ["executions"] });
   };
 
+  const handleAssistantResizeStart = () => {
+    if (!isAssistantPanelOpen) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const splitLayoutElement = splitLayoutRef.current;
+      if (!splitLayoutElement) return;
+
+      const bounds = splitLayoutElement.getBoundingClientRect();
+      const nextWidth = event.clientX - bounds.left;
+      setAssistantPanelWidth(
+        Math.min(
+          MAX_ASSISTANT_PANEL_WIDTH,
+          Math.max(MIN_ASSISTANT_PANEL_WIDTH, nextWidth),
+        ),
+      );
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingAssistantPanel(false);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    setIsResizingAssistantPanel(true);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
   if (isLoading)
     return (
       <div className="flex h-screen items-center justify-center bg-background text-muted-foreground font-medium animate-in fade-in duration-700">
@@ -194,12 +253,15 @@ export default function Project() {
   return (
     <ProtectedRoute>
       <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden font-sans selection:bg-primary/20">
-        <div className="flex flex-1 min-h-0">
+        <div ref={splitLayoutRef} className="flex flex-1 min-h-0">
           {/* Assistant Sidebar */}
           <aside
-            className={`flex flex-col border-r border-border/40 bg-card/40 transition-all duration-300 ease-in-out ${isAssistantPanelOpen ? "w-[380px]" : "w-0 overflow-hidden border-transparent"}`}
+            className={`relative flex flex-col border-r border-border/40 bg-card/40 transition-[width] duration-200 ease-out ${isAssistantPanelOpen ? "overflow-visible" : "overflow-hidden border-transparent"}`}
+            style={{
+              width: isAssistantPanelOpen ? `${assistantPanelWidth}px` : "0px",
+            }}
           >
-            <div className="h-[38px] flex items-center justify-between px-3 border-b border-border/40">
+            <div className="h-[38px] flex items-center justify-between px-3 border-b border-border/40 min-w-0">
               <div className="flex items-center gap-2">
                 <Link
                   to="/apps"
@@ -214,7 +276,7 @@ export default function Project() {
                     onChange={(e) => setLocalProjectName(e.target.value)}
                     onBlur={handleFinishRename}
                     onKeyDown={handleKeyDown}
-                    className="bg-background border border-primary/30 rounded px-2 py-0.5 text-xs outline-none w-32 focus:border-primary/60 transition-colors shadow-inner"
+                    className="bg-transparent outline-none border-b border-foreground/30 text-[13px] font-semibold text-foreground px-0.5 w-[140px]"
                   />
                 ) : (
                   <div
@@ -228,7 +290,6 @@ export default function Project() {
                   </div>
                 )}
               </div>
-              <ModeToggle />
             </div>
             <div className="flex-1 min-h-0">
               <VibeAssistantThread
@@ -252,6 +313,23 @@ export default function Project() {
               />
             </div>
           </aside>
+
+          {isAssistantPanelOpen ? (
+            <div
+              className={[
+                "group relative z-20 w-1 cursor-col-resize select-none bg-transparent transition-colors",
+                isResizingAssistantPanel
+                  ? "bg-primary/25"
+                  : "hover:bg-primary/20",
+              ].join(" ")}
+              onMouseDown={handleAssistantResizeStart}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize assistant panel"
+            >
+              <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/50 group-hover:bg-primary/45" />
+            </div>
+          ) : null}
 
           {/* Main Workspace */}
           <main className="flex-1 flex flex-col min-w-0 bg-background">
