@@ -1,5 +1,11 @@
 // ** import core packages
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  AnyPgColumn,
+} from "drizzle-orm/pg-core";
 
 // ** import schema
 import { user } from "./auth";
@@ -31,6 +37,14 @@ export const execution = pgTable("execution", {
   modelId: text("model_id"),
   result: text("result"), // JSON stringified
   errorMessage: text("error_message"),
+  mergedCommitHash: text("merged_commit_hash"),
+  worktreeBranch: text("worktree_branch"),
+  isReverted: boolean("is_reverted").notNull().default(false),
+  revertedByExecutionId: text("reverted_by_execution_id").references(
+    (): AnyPgColumn => execution.id,
+    { onDelete: "set null" },
+  ),
+  revertedAt: timestamp("reverted_at"),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
