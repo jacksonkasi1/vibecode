@@ -1,6 +1,3 @@
-// ** import core packages
-import { DeleteObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
-
 // ** import utils
 import { createR2Client } from "./client";
 
@@ -12,13 +9,8 @@ export async function r2DeleteFile(
   env: Env,
 ): Promise<{ success: boolean }> {
   const client = createR2Client(env);
-
-  const command = new DeleteObjectCommand({
-    Bucket: env.R2_BUCKET_NAME,
-    Key: filePath,
-  });
-
-  await client.send(command);
+  const bucket = client.bucket(env.GCS_BUCKET_NAME);
+  await bucket.file(filePath).delete();
   return { success: true };
 }
 
@@ -28,8 +20,8 @@ export async function r2DeleteFileByUrl(
 ): Promise<{ success: boolean }> {
   let filePath: string;
 
-  if (env.R2_PUBLIC_URL && fileUrl.startsWith(env.R2_PUBLIC_URL)) {
-    filePath = fileUrl.replace(env.R2_PUBLIC_URL, "").replace(/^\//, "");
+  if (env.GCS_PUBLIC_URL && fileUrl.startsWith(env.GCS_PUBLIC_URL)) {
+    filePath = fileUrl.replace(env.GCS_PUBLIC_URL, "").replace(/^\//, "");
   } else {
     // Parse URL to extract pathname
     try {
@@ -56,17 +48,16 @@ export async function r2DeleteMultipleFiles(
   }
 
   const client = createR2Client(env);
+  const bucket = client.bucket(env.GCS_BUCKET_NAME);
+  const settled = await Promise.allSettled(
+    filePaths.map((filePath) => bucket.file(filePath).delete()),
+  );
+  const deleted = settled.filter(
+    (entry) => entry.status === "fulfilled",
+  ).length;
 
-  const command = new DeleteObjectsCommand({
-    Bucket: env.R2_BUCKET_NAME,
-    Delete: {
-      Objects: filePaths.map((key) => ({ Key: key })),
-    },
-  });
-
-  const response = await client.send(command);
   return {
     success: true,
-    deleted: response.Deleted?.length || 0,
+    deleted,
   };
 }

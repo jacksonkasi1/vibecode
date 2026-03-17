@@ -23,12 +23,12 @@ export const env = createEnv({
     PUBSUB_EXECUTIONS_SUBSCRIPTION: z.string().optional(),
     PUBSUB_ENABLE_POLLER_FALLBACK: booleanFromString.default(true),
 
-    // R2 Storage (for uploading artifacts)
-    R2_ACCESS_KEY_ID: z.string().min(1).optional(),
-    R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
-    R2_ENDPOINT_URL: z.string().url().optional(),
-    R2_BUCKET_NAME: z.string().min(1).optional(),
-    R2_PUBLIC_URL: z.string().url().optional(),
+    // GCS Storage (for uploading artifacts)
+    GCS_PROJECT_ID: z.string().min(1).optional(),
+    GCS_BUCKET_NAME: z.string().min(1).optional(),
+    GCS_KEY_FILE: z.string().min(1).optional(),
+    GCS_KEY_JSON: z.string().min(1).optional(),
+    GCS_PUBLIC_URL: z.string().url().optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

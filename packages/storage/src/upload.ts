@@ -1,6 +1,4 @@
 // ** import core packages
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { nanoid } from "nanoid";
 
 // ** import utils
@@ -26,16 +24,15 @@ export async function r2GetSignedUploadUrl(
   options?: UploadOptions,
 ): Promise<{ signedUrl: string; filePath: string }> {
   const client = createR2Client(env);
+  const bucket = client.bucket(env.GCS_BUCKET_NAME);
   const filePath = generateFilePath(fileName, options?.organizationId);
+  const file = bucket.file(filePath);
 
-  const command = new PutObjectCommand({
-    Bucket: env.R2_BUCKET_NAME,
-    Key: filePath,
-    ContentType: options?.contentType,
-  });
-
-  const signedUrl = await getSignedUrl(client, command, {
-    expiresIn: options?.expiresIn || 3600,
+  const [signedUrl] = await file.getSignedUrl({
+    version: "v4",
+    action: "write",
+    expires: Date.now() + (options?.expiresIn || 3600) * 1000,
+    contentType: options?.contentType,
   });
 
   return { signedUrl, filePath };
@@ -48,18 +45,19 @@ export async function r2UploadBuffer(
   options?: UploadOptions,
 ): Promise<FileObject> {
   const client = createR2Client(env);
+  const bucket = client.bucket(env.GCS_BUCKET_NAME);
   const filePath = generateFilePath(fileName, options?.organizationId);
+  const file = bucket.file(filePath);
 
-  const command = new PutObjectCommand({
-    Bucket: env.R2_BUCKET_NAME,
-    Key: filePath,
-    Body: buffer,
-    ContentType: options?.contentType,
+  await file.save(buffer, {
+    metadata: {
+      contentType: options?.contentType,
+    },
   });
 
-  await client.send(command);
-
-  const url = env.R2_PUBLIC_URL ? `${env.R2_PUBLIC_URL}/${filePath}` : filePath;
+  const url = env.GCS_PUBLIC_URL
+    ? `${env.GCS_PUBLIC_URL}/${filePath}`
+    : filePath;
 
   return {
     key: filePath,

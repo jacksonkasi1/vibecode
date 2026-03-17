@@ -7,7 +7,11 @@ import type { Execution } from "@repo/db";
 
 // ** import apis
 import { updateProject } from "@/rest-api/projects";
-import { createExecution } from "@/rest-api/executions";
+import {
+  createExecution,
+  cancelExecution,
+  undoExecution,
+} from "@/rest-api/executions";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
@@ -58,6 +62,8 @@ function openExecutionStream(
           payload?: {
             status?: string;
             content?: string;
+            name?: string;
+            result?: unknown;
             usage?: unknown;
           };
         };
@@ -103,6 +109,44 @@ function openExecutionStream(
 
         assistantTextBuffer = "";
       }
+
+      if (eventType === "tool:result") {
+        const toolName =
+          typeof payload.name === "string" && payload.name.trim().length > 0
+            ? payload.name
+            : "tool";
+        const rawResult =
+          typeof payload.result === "string"
+            ? payload.result
+            : JSON.stringify(payload.result, null, 2);
+
+        const toolOutput = [
+          "",
+          `Ran ${toolName}`,
+          "```text",
+          rawResult || "(no output)",
+          "```",
+          "",
+        ].join("\n");
+
+        updateExecutionInCache(
+          queryClient,
+          workspaceId,
+          executionId,
+          (execution) => {
+            const existingText = readExecutionText(execution.result);
+
+            return {
+              ...execution,
+              status: "running",
+              result: JSON.stringify({
+                text: `${existingText}${toolOutput}`,
+                usage: payload.usage ?? null,
+              }),
+            };
+          },
+        );
+      }
     } catch {
       // ignore malformed stream event payload
     }
@@ -137,6 +181,8 @@ function openExecutionStream(
       // ignore malformed completion payload
     }
 
+    queryClient.invalidateQueries({ queryKey: ["artifacts", executionId] });
+
     source.close();
   });
 
@@ -159,6 +205,8 @@ function openExecutionStream(
     } catch {
       // ignore malformed failure payload
     }
+
+    queryClient.invalidateQueries({ queryKey: ["artifacts", executionId] });
 
     source.close();
   });
@@ -197,15 +245,18 @@ export function useProjectActions({
     mutationFn: async ({
       prompt,
       modelId,
+      threadId,
     }: {
       prompt: string;
       modelId?: string;
+      threadId?: string;
     }) => {
       if (!workspaceId) throw new Error("Workspace not found");
       return createExecution({
         workspaceId,
         prompt,
         modelId,
+        threadId,
       });
     },
     onSuccess: (response) => {
@@ -215,6 +266,8 @@ export function useProjectActions({
           data: [...current, response.data],
         };
       });
+
+      queryClient.invalidateQueries({ queryKey: ["threads", workspaceId] });
 
       if (workspaceId) {
         openExecutionStream(queryClient, workspaceId, response.data.id);
@@ -229,10 +282,40 @@ export function useProjectActions({
     },
   });
 
+  const undoPromptMutation = useMutation({
+    mutationFn: (executionId: string) => undoExecution(executionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["executions", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["artifacts"] });
+      toast.success("Successfully reverted codebase to selected prompt");
+    },
+    onError: (error) => {
+      toast.error(
+        `Failed to revert codebase: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    },
+  });
+
+  const cancelPromptMutation = useMutation({
+    mutationFn: (executionId: string) => cancelExecution(executionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["executions", workspaceId] });
+    },
+    onError: (error) => {
+      toast.error(
+        `Failed to cancel execution: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    },
+  });
+
   return {
     renameProject: renameProjectMutation.mutate,
     isRenaming: renameProjectMutation.isPending,
     runPrompt: runPromptMutation.mutate,
     isPromptRunning: runPromptMutation.isPending,
+    undoToPrompt: undoPromptMutation.mutate,
+    isUndoing: undoPromptMutation.isPending,
+    cancelPrompt: cancelPromptMutation.mutate,
+    isCanceling: cancelPromptMutation.isPending,
   };
 }

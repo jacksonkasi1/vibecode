@@ -8,6 +8,7 @@ export interface CreateExecutionParams {
   workspaceId: string;
   prompt: string;
   modelId?: string;
+  threadId?: string;
 }
 
 export interface CreateExecutionResponse {

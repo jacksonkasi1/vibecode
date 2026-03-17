@@ -7,6 +7,7 @@ import { getProject } from "@/rest-api/projects";
 import { getWorkspaces } from "@/rest-api/workspaces";
 import { getExecutions } from "@/rest-api/executions";
 import { getArtifacts } from "@/rest-api/artifacts";
+import { getThreads } from "@/rest-api/threads";
 
 export function useProjectData(projectId: string) {
   // 1. Fetch Project
@@ -27,7 +28,16 @@ export function useProjectData(projectId: string) {
   const workspaces = workspacesRes?.data || [];
   const workspace = workspaces[0];
 
-  // 3. Fetch Executions
+  // 3. Fetch Threads
+  const { data: threadsRes, isLoading: isThreadsLoading } = useQuery({
+    queryKey: ["threads", workspace?.id],
+    queryFn: () => getThreads(workspace!.id),
+    enabled: !!workspace?.id,
+  });
+
+  const threads = threadsRes?.data || [];
+
+  // 4. Fetch Executions
   const { data: executionsRes, isLoading: isExecutionsLoading } = useQuery({
     queryKey: ["executions", workspace?.id],
     queryFn: () => getExecutions(workspace?.id),
@@ -44,7 +54,7 @@ export function useProjectData(projectId: string) {
 
   const latestExecutionId = executions[executions.length - 1]?.id;
 
-  // 4. Fetch Artifacts
+  // 5. Fetch Artifacts
   const { data: artifactsRes, isLoading: isArtifactsLoading } = useQuery({
     queryKey: ["artifacts", latestExecutionId],
     queryFn: () =>
@@ -54,14 +64,17 @@ export function useProjectData(projectId: string) {
     enabled: !!latestExecutionId,
   });
 
-  const artifacts = artifactsRes?.data || [];
+  const artifacts = (artifactsRes?.data || []).filter(
+    (artifact) => artifact.type === "file",
+  );
 
   return {
     project,
     workspace,
+    threads,
     executions,
     artifacts,
-    isLoading: isProjectLoading || isWorkspacesLoading,
+    isLoading: isProjectLoading || isWorkspacesLoading || isThreadsLoading,
     isInitialLoading: isProjectLoading && !project,
     isExecutionsLoading,
     isArtifactsLoading,

@@ -1,29 +1,35 @@
 export interface Env {
-  R2_ACCESS_KEY_ID: string;
-  R2_SECRET_ACCESS_KEY: string;
-  R2_ENDPOINT_URL: string;
-  R2_BUCKET_NAME: string;
-  R2_PUBLIC_URL?: string;
+  GCS_PROJECT_ID: string;
+  GCS_KEY_FILE?: string;
+  GCS_KEY_JSON?: string;
+  GCS_BUCKET_NAME: string;
+  GCS_PUBLIC_URL?: string;
 }
 
 export function createEnvFromProcessEnv(): Env {
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  const endpointUrl = process.env.R2_ENDPOINT_URL;
-  const bucketName = process.env.R2_BUCKET_NAME;
+  const projectId = process.env.GCS_PROJECT_ID;
+  const keyFile = process.env.GCS_KEY_FILE;
+  const keyJson = process.env.GCS_KEY_JSON;
+  const bucketName = process.env.GCS_BUCKET_NAME;
 
-  if (!accessKeyId || !secretAccessKey || !endpointUrl || !bucketName) {
+  if (!projectId || !bucketName) {
     throw new Error(
-      "R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT_URL, and R2_BUCKET_NAME environment variables are required",
+      "GCS_PROJECT_ID and GCS_BUCKET_NAME environment variables are required",
+    );
+  }
+
+  if (!keyFile && !keyJson) {
+    throw new Error(
+      "GCS_KEY_FILE or GCS_KEY_JSON environment variable is required",
     );
   }
 
   return {
-    R2_ACCESS_KEY_ID: accessKeyId,
-    R2_SECRET_ACCESS_KEY: secretAccessKey,
-    R2_ENDPOINT_URL: endpointUrl,
-    R2_BUCKET_NAME: bucketName,
-    R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
+    GCS_PROJECT_ID: projectId,
+    GCS_KEY_FILE: keyFile,
+    GCS_KEY_JSON: keyJson,
+    GCS_BUCKET_NAME: bucketName,
+    GCS_PUBLIC_URL: process.env.GCS_PUBLIC_URL,
   };
 }
 

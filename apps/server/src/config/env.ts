@@ -24,11 +24,11 @@ export const env = createEnv({
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
 
-    R2_ACCESS_KEY_ID: z.string().min(1),
-    R2_SECRET_ACCESS_KEY: z.string().min(1),
-    R2_ENDPOINT_URL: z.string().url(),
-    R2_BUCKET_NAME: z.string().min(1),
-    R2_PUBLIC_URL: z.string().url().optional(),
+    GCS_PROJECT_ID: z.string().min(1),
+    GCS_BUCKET_NAME: z.string().min(1),
+    GCS_KEY_FILE: z.string().min(1).optional(),
+    GCS_KEY_JSON: z.string().min(1).optional(),
+    GCS_PUBLIC_URL: z.string().url().optional(),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
 
@@ -38,6 +38,7 @@ export const env = createEnv({
     PUBSUB_PROJECT_ID: z.string().optional(),
     PUBSUB_EXECUTIONS_TOPIC: z.string().optional(),
     EXECUTION_STREAM_POLL_MS: z.coerce.number().default(250),
+    WORKSPACE_DIR: z.string().default("/tmp/vibecode-workspaces"),
   },
 
   runtimeEnv: process.env,
