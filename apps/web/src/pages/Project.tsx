@@ -65,13 +65,15 @@ export default function Project() {
   });
 
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [hasManuallySelectedThread, setHasManuallySelectedThread] =
+    useState(false);
 
   // Automatically select latest thread on load
   useEffect(() => {
-    if (threads.length > 0 && !activeThreadId) {
+    if (threads.length > 0 && !activeThreadId && !hasManuallySelectedThread) {
       setActiveThreadId(threads[0].id);
     }
-  }, [threads, activeThreadId]);
+  }, [threads, activeThreadId, hasManuallySelectedThread]);
 
   const activeExecutions = useMemo(() => {
     if (!activeThreadId) return [];
@@ -298,20 +300,32 @@ export default function Project() {
                 executions={activeExecutions}
                 threads={threads}
                 activeThreadId={activeThreadId}
-                onSelectThread={setActiveThreadId}
+                onSelectThread={(id) => {
+                  setActiveThreadId(id);
+                  setHasManuallySelectedThread(true);
+                }}
                 onSendPrompt={(prompt, modelId) =>
-                  runPrompt({
-                    prompt,
-                    modelId,
-                    threadId: activeThreadId || undefined,
-                  })
+                  runPrompt(
+                    {
+                      prompt,
+                      modelId,
+                      threadId: activeThreadId || undefined,
+                    },
+                    {
+                      onSuccess: (res: any) => {
+                        if (!activeThreadId && res?.data?.threadId) {
+                          setActiveThreadId(res.data.threadId);
+                        }
+                      },
+                    },
+                  )
                 }
                 isSending={isPromptRunning || isAnyExecutionRunning}
                 models={models}
                 runningModelId={
                   isAnyExecutionRunning ? latestExecution?.modelId : undefined
                 }
-                onUndoToMessage={(execId) => {
+                onUndoToMessage={(execId, promptText) => {
                   if (
                     window.confirm(
                       "Are you sure you want to revert the codebase to before this prompt? This action will undo all code changes made by this prompt and any subsequent prompts. You can still view them in history.",
