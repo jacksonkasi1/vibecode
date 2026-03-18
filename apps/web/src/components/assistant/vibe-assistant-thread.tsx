@@ -242,7 +242,7 @@ const ChainOfThought: FC = () => {
 
   return (
     <ChainOfThoughtPrimitive.Root className="my-2 rounded-md border border-border/50 bg-muted/20">
-      <ChainOfThoughtPrimitive.AccordionTrigger className="flex w-full cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground hover:bg-muted/30">
+      <ChainOfThoughtPrimitive.AccordionTrigger className="flex w-full cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/30">
         <AuiIf condition={(s) => s.chainOfThought.collapsed}>
           <ChevronRight className="h-3 w-3" />
         </AuiIf>
@@ -266,7 +266,7 @@ function UserMessage() {
 
   return (
     <div className="group flex w-full flex-col items-end">
-      <MessagePrimitive.Root className="w-fit max-w-[78%] rounded-[22px] bg-muted/55 px-3.5 py-2 text-[14px] font-normal text-foreground/95">
+      <MessagePrimitive.Root className="w-fit max-w-[78%] rounded-3xl bg-muted/55 px-3.5 py-2 text-sm font-normal text-foreground/95">
         <UserMessageAttachments />
         <MessagePrimitive.Parts
           components={{
@@ -299,7 +299,7 @@ function UserMessage() {
 
 function AssistantMessage() {
   return (
-    <MessagePrimitive.Root className="relative w-full py-3 text-[14px] text-foreground/90">
+    <MessagePrimitive.Root className="relative w-full py-3 text-sm text-foreground/90">
       <MessagePrimitive.Parts
         components={
           {
@@ -353,7 +353,7 @@ function StreamingIndicator({
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 py-2">
-      <div className="flex items-center gap-2 text-[13px] text-muted-foreground/80">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
         <Sparkles className="size-3.5 animate-pulse text-muted-foreground/70" />
         <span className="font-medium">
           {modelName ? `${modelName} working` : "Working"}
@@ -480,14 +480,21 @@ export function VibeAssistantThread({
     };
 
     if (exec.status === "failed") {
+      const existingParts = assistantText
+        ? parseAssistantResponse(assistantText, exec.id)
+        : [];
       return [
         base,
         {
           role: "assistant" as const,
           content: [
+            ...existingParts,
             {
               type: "text" as const,
-              text: `Execution failed.\n\n${exec.errorMessage || "Unknown error"}`,
+              text:
+                existingParts.length > 0
+                  ? `\n\n**Execution failed.**\n${exec.errorMessage || "Unknown error"}`
+                  : `Execution failed.\n\n${exec.errorMessage || "Unknown error"}`,
             },
           ],
           metadata: timing ? { timing } : {},
@@ -497,26 +504,18 @@ export function VibeAssistantThread({
       ];
     }
 
-    if (
-      assistantText.trim().length > 0 ||
-      exec.status === "running" ||
-      exec.status === "queued"
-    ) {
-      return [
-        base,
-        {
-          role: "assistant" as const,
-          content: assistantText
-            ? parseAssistantResponse(assistantText, exec.id)
-            : [{ type: "text" as const, text: "" }],
-          metadata: timing ? { timing } : {},
-          id: `a-${exec.id}`,
-          createdAt: new Date(String(exec.createdAt)),
-        },
-      ];
-    }
-
-    return [base];
+    return [
+      base,
+      {
+        role: "assistant" as const,
+        content: assistantText
+          ? parseAssistantResponse(assistantText, exec.id)
+          : [{ type: "text" as const, text: "" }],
+        metadata: timing ? { timing } : {},
+        id: `a-${exec.id}`,
+        createdAt: new Date(String(exec.createdAt)),
+      },
+    ];
   });
 
   const runtime = useExternalStoreRuntime({
@@ -551,10 +550,10 @@ export function VibeAssistantThread({
           <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col bg-background">
             <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto scrollbar-thin relative">
               {/* Thread Header overlay */}
-              <div className="sticky top-0 z-20 h-[32px] border-b border-border/40 bg-background/95 px-2 backdrop-blur-xl flex items-center justify-between">
+              <div className="sticky top-0 z-20 h-8 border-b border-border/40 bg-background/95 px-2 backdrop-blur-xl flex items-center justify-between">
                 <div className="group/chips flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto pr-2 scrollbar-none [mask-image:linear-gradient(to_right,black_90%,transparent_100%)]">
                   {threads.length === 0 ? (
-                    <div className="px-2 text-[11px] font-medium italic text-muted-foreground/60">
+                    <div className="px-2 text-xs font-medium italic text-muted-foreground/60">
                       No active chats
                     </div>
                   ) : (
@@ -587,7 +586,7 @@ export function VibeAssistantThread({
                             }
                           }}
                           className={[
-                            "thread-chip group relative flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-[5px] px-2.5 text-[11px] font-medium transition-all duration-200 ease-out focus-visible:outline-none",
+                            "thread-chip group relative flex h-6.5 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-all duration-200 ease-out focus-visible:outline-none",
                             isActive
                               ? "bg-secondary text-foreground"
                               : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
@@ -608,11 +607,11 @@ export function VibeAssistantThread({
                                 e.stopPropagation();
                               }}
                               onClick={(e) => e.stopPropagation()}
-                              className="max-w-[140px] min-w-[60px] bg-transparent outline-none border-b border-foreground/30 text-[11px] font-medium text-foreground px-0.5 -mx-0.5"
+                              className="max-w-36 min-w-15 bg-transparent outline-none border-b border-foreground/30 text-xs font-medium text-foreground px-0.5 -mx-0.5"
                             />
                           ) : (
                             <span
-                              className="max-w-[140px] truncate select-none"
+                              className="max-w-36 truncate select-none"
                               onDoubleClick={(e) => {
                                 e.stopPropagation();
                                 setEditingThreadId(thread.id);
@@ -631,7 +630,7 @@ export function VibeAssistantThread({
                                 event.stopPropagation();
                                 onSelectThread(null);
                               }}
-                              className="-mr-1 ml-0.5 inline-flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[4px] text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+                              className="-mr-1 ml-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
                               title="Close tab"
                               aria-label="Close active chat tab"
                             >
@@ -651,7 +650,7 @@ export function VibeAssistantThread({
                       setIsHistoryPanelOpen((previousState) => !previousState)
                     }
                     className={[
-                      "inline-flex h-[26px] w-[26px] items-center justify-center rounded-[5px] transition-all duration-200",
+                      "inline-flex size-6.5 items-center justify-center rounded-md transition-all duration-200",
                       isHistoryPanelOpen
                         ? "bg-secondary text-foreground"
                         : "bg-transparent text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
@@ -668,7 +667,7 @@ export function VibeAssistantThread({
                       onSelectThread(null);
                       setIsHistoryPanelOpen(false);
                     }}
-                    className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[5px] bg-transparent text-muted-foreground transition-all duration-200 hover:bg-secondary/50 hover:text-foreground active:scale-95"
+                    className="inline-flex size-6.5 items-center justify-center rounded-md bg-transparent text-muted-foreground transition-all duration-200 hover:bg-secondary/50 hover:text-foreground active:scale-95"
                     title="New Chat"
                     aria-label="Create new chat"
                   >
@@ -681,16 +680,9 @@ export function VibeAssistantThread({
               {isHistoryPanelOpen && (
                 <div
                   ref={historyPanelRef}
-                  className="absolute z-30 flex flex-col bg-background animate-in fade-in duration-200"
-                  style={{
-                    position: "absolute",
-                    top: "32px",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                  }}
+                  className="absolute inset-0 top-8 z-30 flex flex-col bg-background animate-in fade-in duration-200"
                 >
-                  <div className="flex h-[32px] items-center justify-between border-b border-border/20 px-3">
+                  <div className="flex h-8 items-center justify-between border-b border-border/20 px-3">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsHistoryPanelOpen(false)}
@@ -698,7 +690,7 @@ export function VibeAssistantThread({
                       >
                         <ChevronRight className="size-4 rotate-180" />
                       </button>
-                      <span className="text-[13px] font-medium text-foreground">
+                      <span className="text-sm font-medium text-foreground">
                         History
                       </span>
                     </div>
@@ -708,7 +700,7 @@ export function VibeAssistantThread({
                           setIsMultiSelectMode((prev) => !prev);
                           setSelectedThreadIds(new Set());
                         }}
-                        className={`transition-colors hover:text-foreground text-[11px] px-2 py-0.5 rounded-sm border ${
+                        className={`transition-colors hover:text-foreground text-xs px-2 py-0.5 rounded-sm border ${
                           isMultiSelectMode
                             ? "bg-secondary text-foreground border-border/50"
                             : "border-transparent"
@@ -738,7 +730,7 @@ export function VibeAssistantThread({
                   </div>
 
                   <div className="border-b border-border/20 bg-background/50 px-0">
-                    <div className="relative flex h-[32px] items-center">
+                    <div className="relative flex h-8 items-center">
                       <Search className="absolute left-3 size-3.5 text-muted-foreground/60" />
                       <input
                         type="text"
@@ -746,7 +738,7 @@ export function VibeAssistantThread({
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search threads..."
-                        className="h-full w-full bg-transparent pl-8 pr-3 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/60"
+                        className="h-full w-full bg-transparent pl-8 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
                       />
                     </div>
                   </div>
@@ -762,7 +754,7 @@ export function VibeAssistantThread({
                             <div
                               key={thread.id}
                               className={[
-                                "group/history-item flex h-[32px] w-full cursor-pointer items-center justify-between px-3 text-left transition-colors duration-150 border-b border-border/10 last:border-0",
+                                "group/history-item flex h-8 w-full cursor-pointer items-center justify-between px-3 text-left transition-colors duration-150 border-b border-border/10 last:border-0",
                                 isActive && !isMultiSelectMode
                                   ? "bg-secondary/60 text-foreground"
                                   : "bg-transparent text-foreground/90 hover:bg-secondary/40",
@@ -796,10 +788,10 @@ export function VibeAssistantThread({
                                   />
                                 )}
                                 <div className="flex flex-1 justify-between min-w-0">
-                                  <span className="truncate text-[13px] font-medium text-foreground/90">
+                                  <span className="truncate text-sm font-medium text-foreground/90">
                                     {thread.title || "Untitled Chat"}
                                   </span>
-                                  <span className="text-[11px] text-muted-foreground/60 shrink-0">
+                                  <span className="text-xs text-muted-foreground/60 shrink-0">
                                     {new Date(
                                       thread.updatedAt,
                                     ).toLocaleTimeString([], {
@@ -833,7 +825,7 @@ export function VibeAssistantThread({
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center gap-2 px-2 py-8 text-center">
-                        <span className="text-[14px] text-muted-foreground/60">
+                        <span className="text-sm text-muted-foreground/60">
                           {searchQuery
                             ? "No results found"
                             : "No previous chats"}
@@ -858,7 +850,7 @@ export function VibeAssistantThread({
                             setIsMultiSelectMode(false);
                           }
                         }}
-                        className="w-full flex items-center justify-center gap-2 rounded bg-destructive text-destructive-foreground px-3 py-1.5 text-[12px] font-bold transition-all hover:bg-destructive/90"
+                        className="w-full flex items-center justify-center gap-2 rounded bg-destructive text-destructive-foreground px-3 py-1.5 text-xs font-bold transition-all hover:bg-destructive/90"
                       >
                         <Trash2 className="size-3.5" />
                         Delete {selectedThreadIds.size} Selected
@@ -874,10 +866,10 @@ export function VibeAssistantThread({
                     <div className="size-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                       <SelectedModeIcon className="size-5 text-primary" />
                     </div>
-                    <p className="text-[15px] font-medium text-foreground">
+                    <p className="text-sm font-medium text-foreground">
                       What can I help you build?
                     </p>
-                    <p className="text-[13px] text-muted-foreground mt-1.5 max-w-[250px]">
+                    <p className="text-sm text-muted-foreground mt-1.5 max-w-[250px]">
                       Describe your idea, and I'll generate the code.
                     </p>
                   </div>
@@ -918,7 +910,7 @@ export function VibeAssistantThread({
                   rows={1}
                   autoFocus
                   placeholder="Ask Vibe anything..."
-                  className="h-auto min-h-[44px] max-h-[112px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[14px] leading-relaxed placeholder:text-muted-foreground focus:outline-none"
+                  className="h-auto min-h-11 max-h-28 w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-relaxed placeholder:text-muted-foreground focus:outline-none"
                   disabled={isSending}
                 />
 
@@ -928,7 +920,7 @@ export function VibeAssistantThread({
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full border border-border bg-background px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                         >
                           <SelectedModeIcon className="size-3" />
                           {selectedMode}
@@ -936,11 +928,11 @@ export function VibeAssistantThread({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
                         align="start"
-                        className="w-28 text-[11px]"
+                        className="w-28 text-xs"
                       >
                         {modeOptions.map((option) => (
                           <DropdownMenuItem
-                            className="px-2 py-1 text-[11px]"
+                            className="px-2 py-1 text-xs"
                             key={option}
                             onClick={() => setSelectedMode(option)}
                           >
@@ -959,18 +951,18 @@ export function VibeAssistantThread({
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="ml-1 inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          className="ml-1 inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                         >
                           ✦ {selectedModelName}
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
                         align="start"
-                        className="w-56 text-[11px]"
+                        className="w-56 text-xs"
                       >
                         {modelList.map((model) => (
                           <DropdownMenuItem
-                            className="px-2 py-1 text-[11px]"
+                            className="px-2 py-1 text-xs"
                             key={model.id}
                             onClick={() => setSelectedModelId(model.id)}
                           >

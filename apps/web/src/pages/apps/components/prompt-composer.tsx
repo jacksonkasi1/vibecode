@@ -72,7 +72,7 @@ export function PromptComposer({
               }
             }}
             placeholder="Enter the prompt"
-            className="max-h-28 min-h-[56px] w-full resize-none bg-transparent px-2 pt-1 text-[13px] leading-5 placeholder:text-muted-foreground focus:outline-none"
+            className="max-h-28 min-h-14 w-full resize-none bg-transparent px-2 pt-1 text-sm leading-5 placeholder:text-muted-foreground focus:outline-none"
             disabled={isPromptSubmitting}
           />
           <div className="mt-1 flex items-center justify-between gap-2 px-1 pb-0.5">
@@ -81,16 +81,16 @@ export function PromptComposer({
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border border-border/50 bg-background/50 px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     <SelectedModeIcon className="size-3" />
                     {selectedMode}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-32 text-[11px]">
+                <DropdownMenuContent align="start" className="w-32 text-xs">
                   {modeOptions.map((option) => (
                     <DropdownMenuItem
-                      className="px-2 py-1 text-[11px]"
+                      className="px-2 py-1 text-xs"
                       key={option}
                       onClick={() => onSelectMode(option)}
                     >
@@ -109,12 +109,12 @@ export function PromptComposer({
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md border border-border/50 bg-background/50 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    className="inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md border border-border/50 bg-background/50 px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     ✦ {selectedModelName}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56 text-[11px]">
+                <DropdownMenuContent align="start" className="w-56 text-xs">
                   {isModelsLoading ? (
                     [0, 1, 2].map((item) => (
                       <DropdownMenuItem
@@ -126,16 +126,13 @@ export function PromptComposer({
                       </DropdownMenuItem>
                     ))
                   ) : models.length === 0 ? (
-                    <DropdownMenuItem
-                      className="px-2 py-1 text-[11px]"
-                      disabled
-                    >
+                    <DropdownMenuItem className="px-2 py-1 text-xs" disabled>
                       No models available
                     </DropdownMenuItem>
                   ) : (
                     models.map((model) => (
                       <DropdownMenuItem
-                        className="px-2 py-1 text-[11px]"
+                        className="px-2 py-1 text-xs"
                         key={model.id}
                         onClick={() => onSelectModel(model.id)}
                       >
@@ -190,7 +187,7 @@ export function PromptComposer({
           type="button"
           onClick={onCreateBlankProject}
           disabled={isCreatingBlankProject}
-          className="cursor-pointer rounded-md border border-border/50 bg-background/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          className="cursor-pointer rounded-md border border-border/50 bg-background/50 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isCreatingBlankProject ? "Launching..." : "Create Blank Project"}
         </button>

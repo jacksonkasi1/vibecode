@@ -265,7 +265,7 @@ export default function Project() {
               width: isAssistantPanelOpen ? `${assistantPanelWidth}px` : "0px",
             }}
           >
-            <div className="h-[38px] flex items-center justify-between px-3 border-b border-border/40 min-w-0">
+            <div className="h-9 flex items-center justify-between px-3 border-b border-border/40 min-w-0">
               <div className="flex items-center gap-2">
                 <Link
                   to="/apps"
@@ -280,14 +280,14 @@ export default function Project() {
                     onChange={(e) => setLocalProjectName(e.target.value)}
                     onBlur={handleFinishRename}
                     onKeyDown={handleKeyDown}
-                    className="bg-transparent outline-none border-b border-foreground/30 text-[13px] font-semibold text-foreground px-0.5 w-[140px]"
+                    className="bg-transparent outline-none border-b border-foreground/30 text-sm font-semibold text-foreground px-0.5 w-36"
                   />
                 ) : (
                   <div
                     className="flex items-center gap-1 group cursor-pointer"
                     onClick={() => setIsEditingProjectName(true)}
                   >
-                    <span className="text-[13px] font-semibold truncate max-w-[140px] text-foreground/90">
+                    <span className="text-sm font-semibold truncate max-w-36 text-foreground/90">
                       {project?.name}
                     </span>
                     <Pencil className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -362,7 +362,7 @@ export default function Project() {
           {/* Main Workspace */}
           <main className="flex-1 flex flex-col min-w-0 bg-background">
             {/* Toolbar */}
-            <header className="h-[38px] border-b border-border/40 bg-card/40 flex items-center justify-between px-3 z-10 shadow-sm">
+            <header className="h-9 border-b border-border/40 bg-card/40 flex items-center justify-between px-3 z-10 shadow-sm">
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setIsAssistantPanelOpen(!isAssistantPanelOpen)}
@@ -378,7 +378,7 @@ export default function Project() {
                     type="button"
                     onClick={() => setWorkspaceTab("app")}
                     className={[
-                      "px-2.5 py-0.5 text-[11px] font-semibold rounded-[4px] border transition-all h-6",
+                      "px-2.5 py-0.5 text-xs font-semibold rounded-sm border transition-all h-6",
                       workspaceTab === "app"
                         ? "bg-background text-foreground border-border/50"
                         : "border-transparent text-muted-foreground hover:text-foreground",
@@ -390,7 +390,7 @@ export default function Project() {
                     type="button"
                     onClick={() => setWorkspaceTab("code")}
                     className={[
-                      "px-2.5 py-0.5 text-[11px] font-semibold rounded-[4px] border transition-all h-6",
+                      "px-2.5 py-0.5 text-xs font-semibold rounded-sm border transition-all h-6",
                       workspaceTab === "code"
                         ? "bg-background text-foreground border-border/50"
                         : "border-transparent text-muted-foreground hover:text-foreground",
@@ -408,7 +408,7 @@ export default function Project() {
                 <div className="flex items-center mr-1">
                   {latestExecution?.status === "running" ||
                   latestExecution?.status === "queued" ? (
-                    <span className="flex items-center gap-1.5 px-2 h-6 rounded-full bg-amber-500/10 text-amber-500 text-[9px] font-bold uppercase tracking-wider animate-pulse border border-amber-500/20">
+                    <span className="flex items-center gap-1.5 px-2 h-6 rounded-full bg-vibe-warning/10 text-vibe-warning text-[9px] font-bold uppercase tracking-wider animate-pulse border border-vibe-warning/20">
                       <Loader2 className="size-3 animate-spin" /> running
                     </span>
                   ) : null}
@@ -417,7 +417,7 @@ export default function Project() {
                   <Github className="size-3.5 text-muted-foreground" />
                 </button>
                 <div className="h-4 w-px bg-border/40 mx-0.5" />
-                <button className="flex items-center gap-1.5 px-3 h-7 bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98] rounded-md text-[11px] font-bold transition-all shadow-sm border border-primary/50">
+                <button className="flex items-center gap-1.5 px-3 h-7 bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98] rounded-md text-xs font-bold transition-all shadow-sm border border-primary/50">
                   <Globe className="size-3.5" /> Deploy
                 </button>
                 <button className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-colors">
@@ -431,7 +431,7 @@ export default function Project() {
               {/* Explorer */}
               {workspaceTab === "code" ? (
                 <div className="w-56 border-r border-border/40 bg-card/30 flex flex-col">
-                  <div className="h-[32px] flex items-center justify-between px-4 border-b border-border/40 text-[10px] uppercase font-bold text-muted-foreground tracking-widest bg-muted/20">
+                  <div className="h-8 flex items-center justify-between px-4 border-b border-border/40 text-xs uppercase font-bold text-muted-foreground tracking-widest bg-muted/20">
                     Explorer
                     <RotateCw
                       onClick={handleRefresh}
@@ -439,7 +439,7 @@ export default function Project() {
                     />
                   </div>
                   <div className="flex-1 overflow-y-auto py-3 scrollbar-none">
-                    <div className="px-4 py-1.5 text-[11px] text-muted-foreground flex items-center gap-2 hover:bg-secondary/30 cursor-pointer group">
+                    <div className="px-4 py-1.5 text-xs text-muted-foreground flex items-center gap-2 hover:bg-secondary/30 cursor-pointer group">
                       <ChevronDown className="size-3 group-hover:text-foreground transition-colors" />
                       <Folder className="size-3.5 text-muted-foreground/80" />
                       <span className="font-semibold group-hover:text-foreground tracking-tight">
@@ -447,7 +447,7 @@ export default function Project() {
                       </span>
                     </div>
                     {artifacts.length === 0 ? (
-                      <div className="px-8 py-3 text-[11px] text-muted-foreground/50 italic font-medium">
+                      <div className="px-8 py-3 text-xs text-muted-foreground/50 italic font-medium">
                         No files synthesized
                       </div>
                     ) : (
@@ -455,7 +455,7 @@ export default function Project() {
                         <div
                           key={file.id}
                           onClick={() => setSelectedFile(file)}
-                          className={`px-8 py-1.5 text-[12px] flex items-center gap-2 cursor-pointer transition-all border-r-2 ${selectedFile?.id === file.id ? "text-primary bg-primary/5 border-primary font-semibold shadow-[inset_-4px_0_8px_-4px_rgba(59,130,246,0.3)]" : "text-muted-foreground/80 hover:bg-secondary/20 border-transparent hover:text-foreground"}`}
+                          className={`px-8 py-1.5 text-xs flex items-center gap-2 cursor-pointer transition-all border-r-2 ${selectedFile?.id === file.id ? "text-primary bg-primary/5 border-primary font-semibold shadow-[inset_-4px_0_8px_-4px_rgba(59,130,246,0.3)]" : "text-muted-foreground/80 hover:bg-secondary/20 border-transparent hover:text-foreground"}`}
                         >
                           <FileCode
                             className={`size-3.5 ${selectedFile?.id === file.id ? "text-primary" : "text-muted-foreground/40"}`}
@@ -477,7 +477,7 @@ export default function Project() {
                         title="App preview"
                         sandbox="allow-scripts allow-same-origin"
                         srcDoc={previewSource}
-                        className="h-full w-full bg-white"
+                        className="h-full w-full bg-background"
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -487,18 +487,18 @@ export default function Project() {
                   </div>
                 ) : (
                   <>
-                    <div className="h-[32px] flex items-center bg-card/30 px-1 border-b border-border/40 gap-0.5">
+                    <div className="h-8 flex items-center bg-card/30 px-1 border-b border-border/40 gap-0.5">
                       {selectedFile ? (
-                        <div className="h-full flex items-center gap-2.5 px-4 bg-card border-t-2 border-primary text-[11px] font-bold text-foreground animate-in slide-in-from-top-1 duration-300">
+                        <div className="h-full flex items-center gap-2.5 px-4 bg-card border-t-2 border-primary text-xs font-bold text-foreground animate-in slide-in-from-top-1 duration-300">
                           <FileCode className="size-3.5 text-primary" />
                           {selectedFile.name}
                         </div>
                       ) : (
-                        <div className="h-full flex items-center gap-2.5 px-4 italic text-muted-foreground text-[11px] opacity-50">
+                        <div className="h-full flex items-center gap-2.5 px-4 italic text-muted-foreground text-xs opacity-50">
                           No file open
                         </div>
                       )}
-                      <div className="ml-auto flex items-center gap-1 px-2 text-[10px] text-muted-foreground">
+                      <div className="ml-auto flex items-center gap-1 px-2 text-xs text-muted-foreground">
                         <button
                           type="button"
                           onClick={() => setEditorWordWrap((prev) => !prev)}
@@ -578,7 +578,7 @@ export default function Project() {
 
             {/* Terminal Area */}
             <footer className="h-48 border-t border-border/40 bg-card/20 flex flex-col z-20">
-              <div className="h-[32px] flex items-center px-4 border-b border-border/40 gap-6 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
+              <div className="h-8 flex items-center px-4 border-b border-border/40 gap-6 text-xs font-black text-muted-foreground uppercase tracking-widest">
                 <div className="flex items-center gap-2 text-primary border-b-2 border-primary h-full px-1">
                   <TerminalIcon className="size-3" /> Terminal
                 </div>
@@ -594,7 +594,7 @@ export default function Project() {
                     latestExecution?.status === "queued") && (
                     <button
                       onClick={() => cancelPrompt(latestExecution.id)}
-                      className="flex items-center gap-1.5 text-destructive hover:text-white hover:bg-destructive/20 px-2 py-0.5 rounded transition-all"
+                      className="flex items-center gap-1.5 text-destructive hover:text-destructive-foreground hover:bg-destructive/20 px-2 py-0.5 rounded transition-all"
                     >
                       <Square className="size-3 fill-current" /> Stop
                     </button>
@@ -606,15 +606,15 @@ export default function Project() {
                         modelId: latestExecution?.modelId || "gemini-2.0-flash",
                       })
                     }
-                    className="flex items-center gap-1.5 text-emerald-500 hover:text-foreground hover:bg-emerald-500/20 px-2 py-0.5 rounded transition-all"
+                    className="flex items-center gap-1.5 text-vibe-success hover:text-foreground hover:bg-vibe-success/20 px-2 py-0.5 rounded transition-all"
                   >
                     <Play className="size-3 fill-current" /> Run
                   </button>
                 </div>
               </div>
-              <div className="flex-1 p-5 font-mono text-[12px] bg-background overflow-y-auto scrollbar-thin scrollbar-thumb-white/5">
+              <div className="flex-1 p-5 font-mono text-xs bg-background overflow-y-auto scrollbar-thin scrollbar-thumb-white/5">
                 <div className="flex gap-2.5 items-center mb-3">
-                  <span className="px-2 py-0.5 rounded-sm bg-emerald-500/10 text-emerald-500 text-[10px] font-black tracking-tighter shadow-sm border border-emerald-500/20">
+                  <span className="px-2 py-0.5 rounded-sm bg-vibe-success/10 text-vibe-success text-[10px] font-black tracking-tighter shadow-sm border border-vibe-success/20">
                     AGENT_ACTIVE
                   </span>
                   <span className="text-muted-foreground/40 text-[10px] tracking-wide">
@@ -624,7 +624,7 @@ export default function Project() {
 
                 <div className="space-y-1.5 text-muted-foreground/90">
                   <div className="flex gap-2 items-center">
-                    <span className="text-emerald-500 font-bold opacity-80">
+                    <span className="text-vibe-success font-bold opacity-80">
                       ➜
                     </span>
                     <span className="text-primary font-bold tracking-tight">
@@ -655,7 +655,7 @@ export default function Project() {
                     </div>
                   ) : (
                     <div className="mt-6 text-center py-8">
-                      <div className="inline-block px-4 py-2 rounded-lg border border-border/40 bg-card/40 text-muted-foreground/60 text-[11px] font-bold tracking-[0.3em] uppercase">
+                      <div className="inline-block px-4 py-2 rounded-lg border border-border/40 bg-card/40 text-muted-foreground/60 text-xs font-bold tracking-widest uppercase">
                         No active processes
                       </div>
                     </div>

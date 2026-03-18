@@ -278,7 +278,7 @@ export default function AIModelSettings() {
                     onChange={(event) =>
                       updateConnectionSetting(id, "name", event.target.value)
                     }
-                    className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+                    className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 </label>
               ) : null}
@@ -292,7 +292,7 @@ export default function AIModelSettings() {
                     updateConnectionSetting(id, "apiKey", event.target.value)
                   }
                   placeholder="Enter API key"
-                  className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </label>
 
@@ -310,7 +310,7 @@ export default function AIModelSettings() {
                       )
                     }
                     placeholder="https://api.example.com/v1"
-                    className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+                    className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 </label>
               ) : null}
@@ -362,7 +362,7 @@ export default function AIModelSettings() {
                         onChange={(event) =>
                           updateMaxTokens(id, Number(event.target.value))
                         }
-                        className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+                        className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
                       />
                     </label>
                   </div>

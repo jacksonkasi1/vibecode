@@ -38,14 +38,14 @@ export function ProjectActionsMenu({
     >
       <div
         ref={menuRef}
-        className="absolute min-w-[160px] rounded-md border border-border bg-popover p-1 shadow-md"
+        className="absolute min-w-40 rounded-md border border-border bg-popover p-1 shadow-md"
         style={{ left: x, top: y }}
       >
         <button
           type="button"
           onClick={onRename}
           disabled={isRenamePending || isDeletePending || isStopPending}
-          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Pencil className="h-3 w-3" />
           Rename
@@ -54,7 +54,7 @@ export function ProjectActionsMenu({
           type="button"
           onClick={onStop}
           disabled={!canStopWorkspace || isStopPending}
-          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isStopPending ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -67,7 +67,7 @@ export function ProjectActionsMenu({
           type="button"
           onClick={onDelete}
           disabled={isDeletePending || isStopPending}
-          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isDeletePending ? (
             <Loader2 className="h-3 w-3 animate-spin" />
