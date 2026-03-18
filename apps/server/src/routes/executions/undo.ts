@@ -67,16 +67,30 @@ route.post("/:id/undo", async (c) => {
         env.WORKSPACE_DIR || "/tmp/vibecode-workspaces",
         execRecord.workspaceId,
         async () => {
+          // --- Phase 3: Two-Phase Rollback using low-level Git plumbing ---
+          // Step 1: Restore the working tree to the target commit state.
+          //   - git read-tree populates the index from the target tree.
+          //   - git checkout-index writes every indexed file to the working directory.
+          //   - git clean removes any untracked files left behind.
+          //   - A second git read-tree re-syncs the index cleanly.
+          // Step 2: Only update the DB if Step 1 fully succeeds (strict two-phase).
+
           try {
-            await execAsync(`git reset --hard ${targetResetHash}`, {
+            // Phase A — Restore working tree (plumbing, not porcelain)
+            await execAsync(`git read-tree ${targetResetHash}`, {
               cwd: workspacePath,
             });
+            await execAsync(`git checkout-index -a -f`, { cwd: workspacePath });
+            await execAsync(`git clean -fd`, { cwd: workspacePath });
+            // Re-sync index to match HEAD state after the checkout
+            await execAsync(`git read-tree HEAD`, { cwd: workspacePath });
+
             logger.info(
-              `Workspace ${execRecord.workspaceId} hard reset to ${targetResetHash} (before execution ${id})`,
+              `Workspace ${execRecord.workspaceId} two-phase rolled back to ${targetResetHash} (before execution ${id})`,
             );
           } catch (error) {
             throw new Error(
-              `Reset failed: ${error instanceof Error ? error.message : String(error)}`,
+              `Two-phase reset failed: ${error instanceof Error ? error.message : String(error)}`,
             );
           }
         },
