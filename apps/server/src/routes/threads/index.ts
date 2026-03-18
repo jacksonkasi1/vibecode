@@ -8,6 +8,7 @@ import { authMiddleware, requireAuth } from "@/middleware/auth";
 import listRoute from "./list";
 import renameRoute from "./rename";
 import deleteRoute from "./delete";
+import restoreRoute from "./restore";
 
 // ** import types
 import type { AppEnv } from "@/types";
@@ -21,5 +22,6 @@ threadsRouter.use("*", requireAuth);
 threadsRouter.route("/", listRoute);
 threadsRouter.route("/", renameRoute);
 threadsRouter.route("/", deleteRoute);
+threadsRouter.route("/", restoreRoute);
 
 export default threadsRouter;

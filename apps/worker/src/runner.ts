@@ -527,6 +527,52 @@ Think step-by-step and complete the objective.`;
 
     let mergedCommitHash = "";
 
+    // --- Phase 2: Granular Git Checkpointing ---
+    // Before merging, snapshot the exact worktree + index state as an orphaned
+    // commit stored under refs/checkpoints/<execution_id>. This gives us a
+    // perfect rollback point that is completely decoupled from the main branch.
+    if (!isCancelled) {
+      try {
+        await execAsync(`git add .`, { cwd: worktreeDir });
+
+        // Capture tree SHAs for both the index and the working tree
+        const { stdout: indexTreeSha } = await execAsync(`git write-tree`, {
+          cwd: worktreeDir,
+        });
+        const { stdout: worktreeTreeSha } = await execAsync(
+          `git stash create`,
+          { cwd: worktreeDir },
+        ).catch(() => execAsync(`git write-tree`, { cwd: worktreeDir }));
+
+        const checkpointPayload = JSON.stringify({
+          executionId: execRecord.id,
+          workspaceId: execRecord.workspaceId,
+          indexTree: indexTreeSha.trim(),
+          worktreeTree: worktreeTreeSha.trim() || indexTreeSha.trim(),
+          capturedAt: new Date().toISOString(),
+        });
+
+        // Create an orphaned commit (no parent) so it doesn't pollute history
+        const { stdout: checkpointCommitSha } = await execAsync(
+          `git commit-tree ${indexTreeSha.trim()} -m ${JSON.stringify(checkpointPayload)}`,
+          { cwd: worktreeDir },
+        );
+
+        // Store under a custom ref
+        await execAsync(
+          `git update-ref refs/checkpoints/${execRecord.id} ${checkpointCommitSha.trim()}`,
+          { cwd: workspacePath },
+        ).catch((err) => logger.warn(`Failed to store checkpoint ref: ${err}`));
+
+        logger.info(
+          `Checkpoint created for execution ${execRecord.id}: ${checkpointCommitSha.trim()}`,
+        );
+      } catch (err) {
+        // Checkpoint failures are non-fatal — the merge can still proceed
+        logger.warn(`Failed to create checkpoint for ${execRecord.id}: ${err}`);
+      }
+    }
+
     // If we finished successfully, commit the worktree and merge it back to the main workspace
     if (!isCancelled) {
       try {

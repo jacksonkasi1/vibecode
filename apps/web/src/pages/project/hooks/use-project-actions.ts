@@ -12,7 +12,10 @@ import {
   cancelExecution,
   undoExecution,
 } from "@/rest-api/executions";
-import { renameThread, deleteThread } from "@/rest-api/threads";
+import { renameThread, deleteThread, restoreThread } from "@/rest-api/threads";
+
+// ** import utils
+import { useUndoStack } from "@/lib/undo-stack";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
@@ -110,44 +113,6 @@ function openExecutionStream(
 
         assistantTextBuffer = "";
       }
-
-      if (eventType === "tool:result") {
-        const toolName =
-          typeof payload.name === "string" && payload.name.trim().length > 0
-            ? payload.name
-            : "tool";
-        const rawResult =
-          typeof payload.result === "string"
-            ? payload.result
-            : JSON.stringify(payload.result, null, 2);
-
-        const toolOutput = [
-          "",
-          `Ran ${toolName}`,
-          "```text",
-          rawResult || "(no output)",
-          "```",
-          "",
-        ].join("\n");
-
-        updateExecutionInCache(
-          queryClient,
-          workspaceId,
-          executionId,
-          (execution) => {
-            const existingText = readExecutionText(execution.result);
-
-            return {
-              ...execution,
-              status: "running",
-              result: JSON.stringify({
-                text: `${existingText}${toolOutput}`,
-                usage: payload.usage ?? null,
-              }),
-            };
-          },
-        );
-      }
     } catch {
       // ignore malformed stream event payload
     }
@@ -227,6 +192,7 @@ export function useProjectActions({
   workspaceId,
 }: UseProjectActionsOptions) {
   const queryClient = useQueryClient();
+  const { push: pushUndo } = useUndoStack();
 
   const renameProjectMutation = useMutation({
     mutationFn: (newName: string) =>
@@ -323,15 +289,35 @@ export function useProjectActions({
   });
 
   const deleteThreadMutation = useMutation({
-    mutationFn: (threadId: string) => deleteThread(threadId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["threads", workspaceId] });
-      toast.success("Thread deleted");
+    mutationFn: async (threadId: string) => {
+      // Optimistically remove from cache immediately
+      queryClient.setQueryData(["threads", workspaceId], (prev: any) => {
+        const current = Array.isArray(prev?.data) ? prev.data : [];
+        return { data: current.filter((t: any) => t.id !== threadId) };
+      });
+
+      // Push onto the undo stack. The actual DELETE call only fires after the
+      // 10-second window expires (onCommit). If the user presses Cmd+Z within
+      // that window, onRestore is called instead.
+      pushUndo({
+        id: threadId,
+        label: "Thread deleted",
+        onCommit: async () => {
+          await deleteThread(threadId);
+          queryClient.invalidateQueries({ queryKey: ["threads", workspaceId] });
+        },
+        onRestore: async () => {
+          await restoreThread(threadId);
+          queryClient.invalidateQueries({ queryKey: ["threads", workspaceId] });
+        },
+      });
     },
     onError: (error) => {
       toast.error(
         `Failed to delete thread: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
+      // Re-fetch on error to restore correct state
+      queryClient.invalidateQueries({ queryKey: ["threads", workspaceId] });
     },
   });
 
