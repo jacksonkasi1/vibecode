@@ -93,7 +93,7 @@ export function ProjectRow({
     <div>
       <div className="group flex items-center gap-1 px-1 py-1">
         {isEditing ? (
-          <div className="flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px]">
+          <div className="flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-left text-sm">
             <div className="min-w-0 flex flex-1 items-center gap-1.5">
               <input
                 autoFocus
@@ -141,7 +141,7 @@ export function ProjectRow({
               onQuickContinue(project.id);
             }}
             className={[
-              "flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-secondary/50",
+              "flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/50",
               quickContinuePending
                 ? "cursor-not-allowed opacity-60"
                 : "cursor-pointer",
@@ -226,7 +226,7 @@ function ProjectStatusMeta({
   return (
     <span
       className={[
-        "ml-3 inline-flex shrink-0 items-center gap-2 text-[11px]",
+        "ml-3 inline-flex shrink-0 items-center gap-2 text-xs",
         isOnline ? "text-emerald-600" : "text-muted-foreground",
       ].join(" ")}
     >
