@@ -58,7 +58,7 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const ThreadActionContext = createContext<{
-  onUndoToMessage?: (messageId: string) => void;
+  onUndoToMessage?: (messageId: string, promptText: string) => void;
 }>({});
 
 const modeOptions = ["Agent", "Plan"] as const;
@@ -278,18 +278,21 @@ function UserMessage() {
           }}
         />
       </MessagePrimitive.Root>
-      {onUndoToMessage &&
-        messageState.id.startsWith("u-") &&
-        !(messageState.metadata as any)?.isReverted && (
-          <button
-            type="button"
-            onClick={() => onUndoToMessage(messageState.id.replace("u-", ""))}
-            className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 pointer-events-none transition-all hover:bg-secondary/70 hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto"
-            title="Revert codebase to before this prompt"
-          >
-            <Undo2 className="size-3" />
-          </button>
-        )}
+      {onUndoToMessage && messageState.id.startsWith("u-") && (
+        <button
+          type="button"
+          onClick={() => {
+            const text = messageState.content
+              .map((c: any) => c.text || "")
+              .join("");
+            onUndoToMessage(messageState.id.replace("u-", ""), text);
+          }}
+          className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 pointer-events-none transition-all hover:bg-secondary/70 hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto"
+          title="Revert codebase to before this prompt"
+        >
+          <Undo2 className="size-3" />
+        </button>
+      )}
     </div>
   );
 }
@@ -371,7 +374,7 @@ interface VibeAssistantThreadProps {
   isSending?: boolean;
   models: { id: string; displayName: string }[];
   runningModelId?: string | null;
-  onUndoToMessage?: (messageId: string) => void;
+  onUndoToMessage?: (messageId: string, promptText: string) => void;
   onRenameThread?: (threadId: string, title: string) => void;
   onDeleteThread?: (threadId: string) => void;
 }
@@ -471,17 +474,9 @@ export function VibeAssistantThread({
 
     const base = {
       role: "user" as const,
-      content: [
-        {
-          type: "text" as const,
-          text: exec.isReverted
-            ? `~~${exec.prompt}~~ *(reverted)*`
-            : exec.prompt,
-        },
-      ],
+      content: [{ type: "text" as const, text: exec.prompt }],
       id: `u-${exec.id}`,
       createdAt: new Date(String(exec.createdAt)),
-      metadata: { isReverted: !!exec.isReverted },
     };
 
     if (exec.status === "failed") {
@@ -540,7 +535,18 @@ export function VibeAssistantThread({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <ThreadActionContext.Provider value={{ onUndoToMessage }}>
+      <ThreadActionContext.Provider
+        value={{
+          onUndoToMessage: (execId, promptText) => {
+            if (onUndoToMessage) {
+              onUndoToMessage(execId, promptText);
+            }
+            if (runtime.thread?.composer) {
+              runtime.thread.composer.setText(promptText);
+            }
+          },
+        }}
+      >
         <TooltipProvider>
           <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col bg-background">
             <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto scrollbar-thin relative">

@@ -6,7 +6,15 @@ import path from "node:path";
 
 // ** import lib
 import { db } from "@repo/db";
-import { execution, workspace, workspaceOperation, eq, and } from "@repo/db";
+import {
+  execution,
+  workspace,
+  workspaceOperation,
+  workspaceRevision,
+  eq,
+  and,
+  gte,
+} from "@repo/db";
 import { newId } from "@repo/db";
 import { logger } from "@repo/logs";
 
@@ -45,61 +53,91 @@ route.post("/:id/undo", async (c) => {
       execRecord.workspaceId,
     );
 
-    const targetCommitHash = execRecord.mergedCommitHash;
+    // Look up the parent hash to do a hard reset to the state BEFORE this execution
+    const [revision] = await db
+      .select()
+      .from(workspaceRevision)
+      .where(eq(workspaceRevision.executionId, execRecord.id))
+      .limit(1);
 
-    if (targetCommitHash) {
-      // Revert the merge commit securely (-m 1 means keep the mainline parent)
+    const targetResetHash = revision?.parentHash;
+
+    if (targetResetHash) {
       await withWorkspaceLock(
         env.WORKSPACE_DIR || "/tmp/vibecode-workspaces",
         execRecord.workspaceId,
         async () => {
           try {
-            await execAsync(`git revert -m 1 ${targetCommitHash} --no-edit`, {
+            await execAsync(`git reset --hard ${targetResetHash}`, {
               cwd: workspacePath,
             });
             logger.info(
-              `Workspace ${execRecord.workspaceId} reverted execution ${id} via git revert`,
+              `Workspace ${execRecord.workspaceId} hard reset to ${targetResetHash} (before execution ${id})`,
             );
           } catch (error) {
-            await execAsync(`git revert --abort`, { cwd: workspacePath }).catch(
-              () => {},
-            );
             throw new Error(
-              `Revert failed due to conflicts: ${error instanceof Error ? error.message : String(error)}`,
+              `Reset failed: ${error instanceof Error ? error.message : String(error)}`,
             );
           }
         },
       );
     } else {
       logger.warn(
-        `Could not find git merge commit for execution ${id}, marking reverted anyway.`,
+        `Could not find parent hash for execution ${id}, marking reverted anyway without git reset.`,
       );
     }
 
-    // Mark as reverted and create audit log in DB
+    // Mark this execution AND ALL SUBSEQUENT executions in the same thread as reverted
+    let revertedCount = 0;
     await db.transaction(async (tx) => {
-      await tx
-        .update(execution)
-        .set({
-          isReverted: true,
-          revertedAt: new Date(),
-        })
-        .where(eq(execution.id, id));
+      const subsequentExecs = await tx
+        .select({ id: execution.id, status: execution.status })
+        .from(execution)
+        .where(
+          and(
+            eq(execution.threadId, execRecord.threadId || ""),
+            gte(execution.createdAt, execRecord.createdAt),
+          ),
+        );
+
+      const execIds = subsequentExecs.map((e) => e.id);
+
+      if (execIds.length > 0) {
+        // Need to do this in batches or individual updates if not supported, but in postgres IN clause works well.
+        // Drizzle doesn't easily do update with IN array out of the box without inArray, so we'll just loop.
+        for (const targetId of execIds) {
+          const targetExec = subsequentExecs.find((e) => e.id === targetId);
+          // If execution is queued or running, cancel it so worker halts
+          await tx
+            .update(execution)
+            .set({
+              isReverted: true,
+              revertedAt: new Date(),
+              revertedByExecutionId: id,
+              status: ["queued", "running"].includes(targetExec?.status || "")
+                ? "cancelled"
+                : undefined,
+            })
+            .where(eq(execution.id, targetId));
+          revertedCount++;
+        }
+      }
 
       await tx.insert(workspaceOperation).values({
         id: newId(),
         workspaceId: execRecord.workspaceId,
         executionId: id,
         userId: user.id,
-        operation: "revert",
+        operation: "reset",
         details: JSON.stringify({
-          commitHashReverted: targetCommitHash,
-          reason: "User requested undo",
+          resetToHash: targetResetHash,
+          reason: "User requested undo to before this prompt",
+          revertedExecutionCount: revertedCount,
         }),
       });
     });
 
-    return c.json({ data: { success: true } });
+    return c.json({ data: { success: true, prompt: execRecord.prompt } });
   } catch (error) {
     logger.error(
       `Failed to undo execution: ${error instanceof Error ? error.message : String(error)}`,
