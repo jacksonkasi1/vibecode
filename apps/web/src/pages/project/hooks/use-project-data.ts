@@ -44,7 +44,7 @@ export function useProjectData(projectId: string) {
     enabled: !!workspace?.id,
   });
 
-  const executions = useMemo(() => {
+  const allExecutions = useMemo(() => {
     return (executionsRes?.data || []).sort(
       (a, b) =>
         new Date(String(a.createdAt)).getTime() -
@@ -52,11 +52,11 @@ export function useProjectData(projectId: string) {
     );
   }, [executionsRes?.data]);
 
-  const activeExecutions = useMemo(() => {
-    return executions.filter((e) => !e.isReverted);
-  }, [executions]);
+  const executions = useMemo(() => {
+    return allExecutions.filter((e) => !e.isReverted);
+  }, [allExecutions]);
 
-  const latestExecutionId = activeExecutions[activeExecutions.length - 1]?.id;
+  const latestExecutionId = executions[executions.length - 1]?.id;
 
   // 5. Fetch Artifacts
   const { data: artifactsRes, isLoading: isArtifactsLoading } = useQuery({
