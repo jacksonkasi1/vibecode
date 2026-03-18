@@ -80,7 +80,8 @@ route.post("/", async (c) => {
     const [created] = await db.transaction(async (tx) => {
       if (isNewThread) {
         // Generate a title from the prompt
-        const title = prompt.length > 40 ? prompt.substring(0, 40) + "..." : prompt;
+        const title =
+          prompt.length > 40 ? prompt.substring(0, 40) + "..." : prompt;
         await tx.insert(chatThread).values({
           id: threadId,
           workspaceId,
