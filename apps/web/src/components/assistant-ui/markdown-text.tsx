@@ -9,11 +9,187 @@ import {
   useIsMarkdownCodeBlock,
 } from "@assistant-ui/react-markdown";
 import remarkGfm from "remark-gfm";
-import { type FC, memo, useState } from "react";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { type FC, type ReactNode, isValidElement, memo, useState } from "react";
+import { Bot, CheckIcon, CopyIcon, FolderKanban, ListTodo } from "lucide-react";
 
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { cn } from "@/lib/utils";
+
+type PlanItem = {
+  agent?: string;
+  description: string;
+  owns: string[];
+};
+
+const AGENT_BADGE_STYLES: Record<string, string> = {
+  orchestrator:
+    "border-violet-500/20 bg-violet-500/10 text-violet-600 dark:text-violet-300",
+  coder: "border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-300",
+  frontend:
+    "border-pink-500/20 bg-pink-500/10 text-pink-600 dark:text-pink-300",
+  backend:
+    "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-300",
+  tester: "border-teal-500/20 bg-teal-500/10 text-teal-600 dark:text-teal-300",
+  researcher:
+    "border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300",
+  debugger:
+    "border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300",
+};
+
+function parsePlanItems(raw: string): PlanItem[] | null {
+  try {
+    const parsed = JSON.parse(raw);
+    const source = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.plan)
+        ? parsed.plan
+        : Array.isArray(parsed?.tasks)
+          ? parsed.tasks
+          : null;
+
+    if (!source) return null;
+
+    const items = source
+      .map((item: unknown): PlanItem | null => {
+        if (!item || typeof item !== "object") return null;
+
+        const candidate = item as {
+          agent?: unknown;
+          description?: unknown;
+          title?: unknown;
+          text?: unknown;
+          summary?: unknown;
+          owns?: unknown;
+        };
+
+        const descriptionFields = [
+          candidate.description,
+          candidate.title,
+          candidate.text,
+          candidate.summary,
+        ];
+        const description = descriptionFields.find(
+          (value): value is string =>
+            typeof value === "string" && value.trim().length > 0,
+        );
+
+        if (!description) return null;
+
+        const owns = Array.isArray(candidate.owns)
+          ? candidate.owns.filter(
+              (value: unknown): value is string => typeof value === "string",
+            )
+          : [];
+
+        return {
+          agent:
+            typeof candidate.agent === "string" ? candidate.agent : undefined,
+          description,
+          owns,
+        };
+      })
+      .filter((item: PlanItem | null): item is PlanItem => item !== null);
+
+    return items.length > 0 ? items : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractCodeBlock(children: ReactNode) {
+  const child = Array.isArray(children) ? children[0] : children;
+  if (!isValidElement(child)) return null;
+
+  const props = child.props as {
+    className?: string;
+    children?: ReactNode;
+  };
+  const codeChildren = props.children;
+  const code = Array.isArray(codeChildren)
+    ? codeChildren.join("")
+    : typeof codeChildren === "string"
+      ? codeChildren
+      : null;
+
+  if (!code) return null;
+
+  return {
+    className: props.className ?? "",
+    code: code.replace(/\n$/, ""),
+  };
+}
+
+const PlanListBlock: FC<{ items: PlanItem[] }> = ({ items }) => {
+  return (
+    <div className="my-3 overflow-hidden rounded-2xl border border-border/50 bg-card/80 shadow-sm backdrop-blur-sm">
+      <div className="flex items-center justify-between border-b border-border/40 bg-muted/20 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <ListTodo className="size-4 text-muted-foreground" />
+          <span className="text-sm font-semibold text-foreground">Plan</span>
+          <span className="rounded-full border border-border/50 bg-background/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {items.length}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-2.5 p-3">
+        {items.map((item, index) => {
+          const badgeClass = item.agent
+            ? (AGENT_BADGE_STYLES[item.agent.toLowerCase()] ??
+              "border-border/50 bg-muted/40 text-muted-foreground")
+            : "border-border/50 bg-muted/40 text-muted-foreground";
+
+          return (
+            <div
+              key={`${item.agent ?? "task"}-${index}-${item.description}`}
+              className="rounded-xl border border-border/40 bg-background/60 px-3 py-3"
+            >
+              <div className="flex gap-3">
+                <div className="flex pt-1">
+                  <span className="mt-1 block size-2 rounded-full border border-muted-foreground/50" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {item.agent ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]",
+                          badgeClass,
+                        )}
+                      >
+                        <Bot className="size-2.5" />
+                        {item.agent}
+                      </span>
+                    ) : null}
+
+                    <p className="text-sm leading-6 text-foreground/90">
+                      {item.description}
+                    </p>
+                  </div>
+
+                  {item.owns.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {item.owns.map((path) => (
+                        <span
+                          key={path}
+                          className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/30 px-2 py-1 font-mono text-[10px] text-muted-foreground"
+                        >
+                          <FolderKanban className="size-2.5" />
+                          {path}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const MarkdownTextImpl = () => {
   return (
@@ -28,6 +204,10 @@ const MarkdownTextImpl = () => {
 export const MarkdownText = memo(MarkdownTextImpl);
 
 const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
+  if (language === "json" && parsePlanItems(code ?? "")) {
+    return null;
+  }
+
   const { isCopied, copyToClipboard } = useCopyToClipboard();
   const onCopy = () => {
     if (!code || isCopied) return;
@@ -217,15 +397,28 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
-  pre: ({ className, ...props }) => (
-    <pre
-      className={cn(
-        "aui-md-pre max-h-[26rem] overflow-auto rounded-t-none rounded-b-lg border border-border/50 border-t-0 bg-muted/30 p-3 text-xs leading-relaxed",
-        className,
-      )}
-      {...props}
-    />
-  ),
+  pre: ({ className, ...props }) =>
+    (() => {
+      const codeBlock = extractCodeBlock(props.children);
+      const planItems =
+        codeBlock && /language-json/.test(codeBlock.className)
+          ? parsePlanItems(codeBlock.code)
+          : null;
+
+      if (planItems) {
+        return <PlanListBlock items={planItems} />;
+      }
+
+      return (
+        <pre
+          className={cn(
+            "aui-md-pre max-h-[26rem] overflow-auto rounded-t-none rounded-b-lg border border-border/50 border-t-0 bg-muted/30 p-3 text-xs leading-relaxed",
+            className,
+          )}
+          {...props}
+        />
+      );
+    })(),
   code: function Code({ className, ...props }) {
     const isCodeBlock = useIsMarkdownCodeBlock();
     return (

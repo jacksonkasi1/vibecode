@@ -5,6 +5,7 @@ import type { WorkspaceMode } from "./workspace-types";
 // ** import core packages
 import { DiffEditor } from "@monaco-editor/react";
 import {
+  ChevronDown,
   FileCode2,
   GitBranch,
   GitCommitHorizontal,
@@ -16,11 +17,356 @@ import { StatusIcon, KindIcon } from "./execution-icons";
 
 // ** import utils
 import {
+  safeJsonParse,
   formatDateTime,
   formatDuration,
   readExecutionText,
   detectLanguageFromPath,
 } from "./execution-utils";
+
+function getTimelineItemLabel(item: ExecutionData["timelineItems"][number]) {
+  const title = item.title.toLowerCase();
+
+  if (item.kind === "thinking") return "Reasoning";
+  if (item.kind === "tool") {
+    if (title.includes("read") || title.includes("cat")) return "Read file";
+    if (title.includes("write") || title.includes("edit")) return "Edited file";
+    if (title.includes("todo")) return "Updated todos";
+    if (
+      title.includes("bash") ||
+      title.includes("exec") ||
+      title.includes("terminal")
+    ) {
+      return "Run command";
+    }
+  }
+
+  return item.title;
+}
+
+function getTimelinePreview(item: ExecutionData["timelineItems"][number]) {
+  if (item.relatedPath) return item.relatedPath;
+  if (item.summary) return item.summary;
+  if (item.kind === "tool") return "Tool call";
+  if (item.kind === "thinking") return "AI reasoning";
+  return item.status;
+}
+
+function getTimelineIconTone(item: ExecutionData["timelineItems"][number]) {
+  if (item.status === "failed") {
+    return "border-destructive/20 bg-destructive/8 text-destructive";
+  }
+  if (item.kind === "thinking") {
+    return "border-vibe-warning/20 bg-vibe-warning/10 text-vibe-warning";
+  }
+  if (item.kind === "status") {
+    return "border-vibe-success/20 bg-vibe-success/10 text-vibe-success";
+  }
+  if (item.kind === "tool" && item.relatedPath) {
+    return "border-vibe-success/20 bg-vibe-success/10 text-vibe-success";
+  }
+  return "border-border/40 bg-muted/40 text-foreground/80";
+}
+
+function getTimelineStatusText(item: ExecutionData["timelineItems"][number]) {
+  if (item.startedAt && item.endedAt) {
+    return formatDuration(item.startedAt, item.endedAt);
+  }
+  if (item.startedAt) {
+    return formatDateTime(item.startedAt, true);
+  }
+  return item.status;
+}
+
+function getPayloadFactEntries(payload: Record<string, unknown> | undefined) {
+  if (!payload) return [] as Array<[string, string]>;
+
+  const keys = [
+    "description",
+    "subagent_type",
+    "command",
+    "filePath",
+    "path",
+    "pattern",
+    "url",
+    "runtime",
+    "status",
+  ];
+
+  return keys
+    .map((key) => {
+      const value = payload[key];
+      if (typeof value !== "string" || !value.trim()) return null;
+      return [key.split("_").join(" "), value.trim()] as [string, string];
+    })
+    .filter((entry): entry is [string, string] => Boolean(entry));
+}
+
+function getPrimaryResultText(result: string | null | undefined) {
+  if (!result) return null;
+
+  const parsed = safeJsonParse<Record<string, unknown>>(result);
+  const candidates = [
+    parsed?.text,
+    parsed?.result,
+    parsed?.content,
+    parsed?.summary,
+    parsed?.message,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return result.trim();
+}
+
+function getTodoItems(payload: Record<string, unknown> | undefined) {
+  const todos = payload?.todos;
+  if (!Array.isArray(todos))
+    return [] as Array<{ content: string; status: string }>;
+
+  return todos
+    .map((todo) => {
+      if (!todo || typeof todo !== "object") return null;
+      const content = "content" in todo ? todo.content : undefined;
+      const status = "status" in todo ? todo.status : undefined;
+
+      if (typeof content !== "string" || typeof status !== "string")
+        return null;
+      return { content, status };
+    })
+    .filter((todo): todo is { content: string; status: string } =>
+      Boolean(todo),
+    );
+}
+
+function TimelineJsonBlock({
+  label,
+  value,
+}: {
+  label: string;
+  value: Record<string, unknown> | string;
+}) {
+  const content =
+    typeof value === "string" ? value : JSON.stringify(value, null, 2);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+        {label}
+      </p>
+      <pre className="max-h-72 overflow-auto rounded-xl border border-border/30 bg-card/70 px-3 py-2.5 font-mono text-[11px] leading-5 text-foreground/82 whitespace-pre-wrap break-words scrollbar-thin">
+        {content}
+      </pre>
+    </div>
+  );
+}
+
+function TimelineDetailCard({
+  item,
+  detail,
+  change,
+  editorTheme,
+}: {
+  item: ExecutionData["timelineItems"][number];
+  detail: ExecutionData["selectedTimelineDetail"];
+  change: ExecutionData["changes"][number] | undefined;
+  editorTheme: "vs" | "vs-dark";
+}) {
+  const parsedResult = safeJsonParse<Record<string, unknown>>(detail?.result);
+  const resultValue = parsedResult ?? detail?.result;
+  const payloadFacts = getPayloadFactEntries(detail?.payload);
+  const primaryResultText = getPrimaryResultText(detail?.result);
+  const todoItems = getTodoItems(detail?.payload);
+
+  if (!detail && !change) return null;
+
+  return (
+    <div className="mt-3 space-y-4 rounded-2xl border border-border/40 bg-card/70 p-4 shadow-sm">
+      {item.kind === "thinking" && detail?.payload?.content ? (
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+            Reasoning
+          </p>
+          <div className="rounded-xl border border-border/30 bg-background/70 px-4 py-3 text-[13px] leading-6 text-foreground/85">
+            {String(detail.payload.content)}
+          </div>
+        </div>
+      ) : (
+        <>
+          {payloadFacts.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {payloadFacts.map(([label, value]) => (
+                <div
+                  key={`${item.id}-${label}`}
+                  className="rounded-xl border border-border/30 bg-background/70 px-3 py-2"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                    {label}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-foreground/85 break-words">
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {todoItems.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                Todos
+              </p>
+              <div className="space-y-2 rounded-xl border border-border/30 bg-background/70 p-3">
+                {todoItems.map((todo, index) => (
+                  <div
+                    key={`${item.id}-todo-${index}`}
+                    className="flex items-start gap-2 text-xs"
+                  >
+                    <span
+                      className={[
+                        "mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full border px-1.5 text-[10px] font-semibold uppercase",
+                        todo.status === "completed"
+                          ? "border-vibe-success/20 bg-vibe-success/10 text-vibe-success"
+                          : todo.status === "in_progress"
+                            ? "border-vibe-warning/20 bg-vibe-warning/10 text-vibe-warning"
+                            : "border-border/30 bg-muted/40 text-muted-foreground",
+                      ].join(" ")}
+                    >
+                      {todo.status === "completed"
+                        ? "Done"
+                        : todo.status === "in_progress"
+                          ? "Now"
+                          : "Todo"}
+                    </span>
+                    <p className="leading-5 text-foreground/85">
+                      {todo.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {item.summary && item.kind !== "tool" ? (
+            <p className="text-xs leading-5 text-muted-foreground/90">
+              {item.summary}
+            </p>
+          ) : null}
+
+          {change ? (
+            <div className="overflow-hidden rounded-xl border border-border/40 bg-background/70 shadow-sm">
+              <div className="flex items-center gap-2 border-b border-border/20 bg-muted/30 px-3 py-2">
+                <FileCode2 className="size-3.5 text-primary" />
+                <p className="truncate text-xs font-medium text-foreground/80">
+                  {change.path}
+                </p>
+                <span className="ml-auto rounded-full border border-border/30 bg-background/80 px-2 py-0.5 text-[10px] font-semibold capitalize text-muted-foreground">
+                  {change.status}
+                </span>
+              </div>
+              <div className="h-64">
+                <DiffEditor
+                  key={`${item.id}-${change.path}`}
+                  theme={editorTheme}
+                  original={change.before}
+                  modified={change.after}
+                  language={detectLanguageFromPath(change.path)}
+                  beforeMount={(monaco) => {
+                    const uri = monaco.Uri.parse(
+                      `inmemory://timeline/${item.id}/${change.path}`,
+                    );
+                    const existing = monaco.editor.getModel(uri);
+                    if (existing) existing.dispose();
+                  }}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    renderSideBySide: false,
+                    scrollBeyondLastLine: false,
+                    lineNumbersMinChars: 3,
+                    fontSize: 12,
+                    padding: { top: 12 },
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {detail?.payload &&
+          Object.keys(detail.payload).length > 0 &&
+          item.kind !== "thinking" &&
+          payloadFacts.length === 0 &&
+          todoItems.length === 0 ? (
+            <TimelineJsonBlock label="Payload" value={detail.payload} />
+          ) : null}
+
+          {detail?.childLines?.length ? (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                Logs
+              </p>
+              <div className="space-y-1.5 rounded-xl border border-border/30 bg-background/70 px-3 py-2.5 font-mono text-[11px] leading-5 text-foreground/78 scrollbar-thin">
+                {detail.childLines.map((line, index) => (
+                  <p key={`${item.id}-line-${index}`}>{line}</p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {primaryResultText && !change ? (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                Result
+              </p>
+              <div className="rounded-xl border border-border/30 bg-background/70 px-4 py-3 text-[13px] leading-6 text-foreground/85 whitespace-pre-wrap break-words">
+                {primaryResultText}
+              </div>
+            </div>
+          ) : null}
+
+          {resultValue && !change && typeof resultValue !== "string" ? (
+            <details className="group rounded-xl border border-border/30 bg-background/60">
+              <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-muted-foreground transition-colors group-open:border-b group-open:border-border/20">
+                View raw result
+              </summary>
+              <div className="px-3 pb-3">
+                <TimelineJsonBlock label="Raw result" value={resultValue} />
+              </div>
+            </details>
+          ) : null}
+
+          {detail?.payload &&
+          Object.keys(detail.payload).length > 0 &&
+          payloadFacts.length > 0 ? (
+            <details className="group rounded-xl border border-border/30 bg-background/60">
+              <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-muted-foreground transition-colors group-open:border-b group-open:border-border/20">
+                View raw payload
+              </summary>
+              <div className="px-3 pb-3">
+                <TimelineJsonBlock label="Raw payload" value={detail.payload} />
+              </div>
+            </details>
+          ) : null}
+
+          {detail?.error ? (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-destructive/80">
+                Error
+              </p>
+              <div className="rounded-xl border border-destructive/20 bg-destructive/8 px-3 py-2.5 font-mono text-[11px] leading-5 text-destructive">
+                {detail.error}
+              </div>
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
 
 export function ExecutionCenterView({
   workspaceMode,
@@ -120,8 +466,8 @@ export function ExecutionCenterView({
 
   if (workspaceMode === "timeline") {
     return (
-      <div className="mx-auto flex w-full max-w-4xl flex-1 overflow-y-auto p-4">
-        <div className="w-full space-y-1">
+      <div className="flex flex-1 overflow-y-auto px-4 py-4 md:px-6">
+        <div className="mx-auto w-full max-w-4xl space-y-3">
           {timelineItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border/40 bg-muted/20 px-4 py-12 text-center text-sm text-muted-foreground">
               Timeline will appear as execution events arrive.
@@ -130,47 +476,98 @@ export function ExecutionCenterView({
 
           {timelineItems.map((item) => {
             const isSelected = selectedTimelineId === item.id;
+            const detail = isSelected
+              ? data.selectedTimelineItem?.id === item.id
+                ? data.selectedTimelineDetail
+                : null
+              : null;
+            const relatedChange = item.relatedPath
+              ? data.changes.find((change) => change.path === item.relatedPath)
+              : undefined;
+
             return (
-              <button
+              <div
                 key={`${item.id}-${item.seq}`}
-                type="button"
-                onClick={() => {
-                  setSelectedTimelineId(item.id);
-                  if (item.relatedPath) onOpenFile?.(item.relatedPath);
-                }}
                 className={[
-                  "w-full rounded-md border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  "rounded-2xl border bg-card/55 shadow-sm transition-all",
                   isSelected
-                    ? "border-primary/30 bg-primary/10 shadow-sm"
-                    : "border-transparent bg-transparent hover:bg-muted/50",
+                    ? "border-border/60 bg-card"
+                    : "border-border/30 hover:border-border/50 hover:bg-card/80",
                 ].join(" ")}
               >
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded bg-muted/50 text-foreground/80">
-                    <KindIcon kind={item.kind} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {item.title}
-                      </p>
-                      <StatusIcon status={item.status} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTimelineId(
+                      item.id === selectedTimelineId ? null : item.id,
+                    );
+                    if (item.relatedPath) onOpenFile?.(item.relatedPath);
+                  }}
+                  className="w-full rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                >
+                  <div className="flex items-start gap-3 px-4 py-3">
+                    <div className="relative flex shrink-0 flex-col items-center">
+                      <div
+                        className={[
+                          "flex size-9 items-center justify-center rounded-xl border",
+                          getTimelineIconTone(item),
+                        ].join(" ")}
+                      >
+                        <KindIcon kind={item.kind} title={item.title} />
+                      </div>
+                      {!isSelected ? (
+                        <div className="mt-2 h-6 w-px bg-border/50" />
+                      ) : null}
                     </div>
-                    {item.relatedPath ? (
-                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
-                        {item.relatedPath}
+                    <div className="min-w-0 flex-1 space-y-1 pt-0.5">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {getTimelineItemLabel(item)}
+                        </p>
+                        {item.status === "running" ||
+                        item.status === "queued" ? (
+                          <StatusIcon status={item.status} />
+                        ) : null}
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {getTimelinePreview(item)}
                       </p>
-                    ) : null}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                      {item.duration > 0
-                        ? formatDuration(item.duration)
-                        : formatDateTime(item.timestamp, true)}
+                      {item.kind === "thinking" && item.summary ? (
+                        <p className="line-clamp-2 text-[12px] leading-5 text-foreground/75">
+                          {item.summary}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-start gap-3 pl-3">
+                      <div className="hidden text-right sm:block">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+                          {getTimelineStatusText(item)}
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground/80 capitalize">
+                          {item.status}
+                        </div>
+                      </div>
+                      <ChevronDown
+                        className={[
+                          "mt-0.5 size-4 text-muted-foreground/60 transition-transform",
+                          isSelected ? "rotate-180" : "rotate-0",
+                        ].join(" ")}
+                      />
                     </div>
                   </div>
-                </div>
-              </button>
+                </button>
+
+                {isSelected ? (
+                  <div className="px-4 pb-4 pl-16">
+                    <TimelineDetailCard
+                      item={item}
+                      detail={detail}
+                      change={relatedChange}
+                      editorTheme={editorTheme}
+                    />
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </div>
@@ -303,7 +700,10 @@ export function ExecutionRightView({
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 text-sm">
         <div className="border-b border-border/25 pb-4">
           <div className="mb-2 flex items-center gap-2">
-            <KindIcon kind={selectedTimelineItem.kind} />
+            <KindIcon
+              kind={selectedTimelineItem.kind}
+              title={selectedTimelineItem.title}
+            />
             <span className="font-semibold text-foreground capitalize">
               {selectedTimelineItem.kind} Details
             </span>

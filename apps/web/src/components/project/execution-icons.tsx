@@ -6,9 +6,13 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
+  FileEdit,
+  FileText,
+  FolderSearch,
   GitBranch,
+  Lightbulb,
+  ListTodo,
   Loader2,
-  Sparkles,
   TerminalSquare,
   TriangleAlert,
   Wrench,
@@ -33,10 +37,44 @@ export function StatusIcon({ status }: { status: TimelineStatus }) {
   return <CheckCircle2 className="size-3.5 text-vibe-success" />;
 }
 
-export function KindIcon({ kind }: { kind: TimelineKind }) {
-  if (kind === "thinking") return <Sparkles className="size-3.5" />;
-  if (kind === "tool") return <Wrench className="size-3.5" />;
-  if (kind === "task") return <Bot className="size-3.5" />;
-  if (kind === "status") return <TerminalSquare className="size-3.5" />;
-  return <Clock3 className="size-3.5" />;
+export function KindIcon({
+  kind,
+  title,
+}: {
+  kind: TimelineKind;
+  title?: string;
+}) {
+  if (kind === "thinking") {
+    return <Lightbulb className="size-3.5 text-vibe-warning" />;
+  }
+
+  if (kind === "tool") {
+    const t = (title || "").toLowerCase();
+    if (t.includes("read") || t.includes("cat")) {
+      return <FileText className="size-3.5 text-primary" />;
+    }
+    if (t.includes("write") || t.includes("edit")) {
+      return <FileEdit className="size-3.5 text-vibe-success" />;
+    }
+    if (t.includes("bash") || t.includes("exec") || t.includes("terminal")) {
+      return <TerminalSquare className="size-3.5 text-primary" />;
+    }
+    if (t.includes("todo")) {
+      return <ListTodo className="size-3.5 text-primary" />;
+    }
+    if (t.includes("ls")) {
+      return <FolderSearch className="size-3.5 text-primary" />;
+    }
+
+    return <Wrench className="size-3.5 text-muted-foreground/80" />;
+  }
+
+  if (kind === "task") {
+    return <Bot className="size-3.5 text-primary" />;
+  }
+  if (kind === "status") {
+    return <CheckCircle2 className="size-3.5 text-vibe-success" />;
+  }
+
+  return <Clock3 className="size-3.5 text-muted-foreground/80" />;
 }
