@@ -26,13 +26,42 @@ import { dispatchExecutionQueued } from "@/lib/execution-dispatch";
 
 const route = new Hono<AppEnv>();
 
+function normalizeEditorContext(input: unknown) {
+  if (!input || typeof input !== "object") return undefined;
+
+  const ctx = input as {
+    activeFilePath?: unknown;
+    visibleContent?: unknown;
+  };
+
+  const activeFilePath =
+    typeof ctx.activeFilePath === "string"
+      ? ctx.activeFilePath.slice(0, 512)
+      : undefined;
+  const visibleContent =
+    typeof ctx.visibleContent === "string"
+      ? ctx.visibleContent.slice(0, 4000)
+      : undefined;
+
+  if (!activeFilePath && !visibleContent) return undefined;
+
+  return { activeFilePath, visibleContent };
+}
+
 route.post("/", async (c) => {
   try {
     const user = c.get("user");
     if (!user) return c.json({ error: "Unauthorized" }, 401);
 
     const body = await c.req.json();
-    const { workspaceId, prompt, modelId, threadId: inputThreadId } = body;
+    const {
+      workspaceId,
+      prompt,
+      modelId,
+      threadId: inputThreadId,
+      editorContext: rawEditorContext,
+    } = body;
+    const editorContext = normalizeEditorContext(rawEditorContext);
 
     if (!workspaceId) return c.json({ error: "workspaceId is required" }, 400);
     if (!prompt || typeof prompt !== "string") {
@@ -122,6 +151,19 @@ route.post("/", async (c) => {
           queuedAt: new Date().toISOString(),
         },
       });
+
+      if (editorContext?.activeFilePath || editorContext?.visibleContent) {
+        await tx.insert(executionEvent).values({
+          id: newId(),
+          executionId,
+          seq: 2,
+          type: "editor:context",
+          payloadJson: {
+            activeFilePath: editorContext.activeFilePath ?? null,
+            visibleContent: editorContext.visibleContent ?? null,
+          },
+        });
+      }
 
       await tx
         .update(chatThread)

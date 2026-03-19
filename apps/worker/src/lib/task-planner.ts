@@ -66,7 +66,7 @@ export async function planTask(
 ): Promise<TaskPlan> {
   try {
     const response = await ai.chat({
-      model: "gemini-2.0-flash",
+      model: "gemini-3-flash-preview",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {

@@ -66,7 +66,7 @@ After all sub-agents complete, summarize: what was built, which files changed, a
 
 IMPORTANT: You cannot write files or run commands yourself. Delegate all implementation via task/tasks.`,
     maxSteps: 100,
-    model: "gemini-2.0-flash",
+    model: "gemini-3-flash-preview",
   },
 
   coder: {

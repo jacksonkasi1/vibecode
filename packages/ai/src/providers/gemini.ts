@@ -17,13 +17,21 @@ import type {
 
 const GEMINI_MODELS: ModelInfo[] = [
   {
+    id: "gemini-3-flash-preview",
+    displayName: "Gemini 3 Flash Preview",
+    provider: "gemini",
+    contextWindow: 1048576,
+    maxTokens: 65536,
+    capabilities: ["chat", "code", "tools"],
+    isDefault: true,
+  },
+  {
     id: "gemini-2.5-pro-preview-05-06",
     displayName: "Gemini 2.5 Pro Preview",
     provider: "gemini",
     contextWindow: 1048576,
     maxTokens: 65536,
     capabilities: ["chat", "code", "reasoning", "tools"],
-    isDefault: true,
   },
   {
     id: "gemini-2.5-flash-preview-05-20",

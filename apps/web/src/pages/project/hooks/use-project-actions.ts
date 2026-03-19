@@ -30,6 +30,81 @@ function readExecutionText(result: string | null): string {
   }
 }
 
+function readExecutionResult(result: string | null): {
+  text: string;
+  usage?: unknown;
+  current?: string;
+  live?: string[];
+} {
+  if (!result) return { text: "", live: [] };
+
+  try {
+    const parsed = JSON.parse(result) as {
+      text?: unknown;
+      usage?: unknown;
+      current?: unknown;
+      live?: unknown;
+    };
+
+    return {
+      text:
+        typeof parsed.text === "string"
+          ? parsed.text
+          : readExecutionText(result),
+      usage: parsed.usage,
+      current: typeof parsed.current === "string" ? parsed.current : undefined,
+      live: Array.isArray(parsed.live)
+        ? parsed.live.filter((item): item is string => typeof item === "string")
+        : [],
+    };
+  } catch {
+    return { text: readExecutionText(result), live: [] };
+  }
+}
+
+function buildLiveLabel(eventType: string, payload: Record<string, unknown>) {
+  const args =
+    payload.args && typeof payload.args === "object"
+      ? (payload.args as Record<string, unknown>)
+      : {};
+  const detail = (...values: Array<unknown>) => {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return "";
+  };
+
+  if (eventType === "run:start") return "Starting agent runtime";
+  if (eventType === "runtime:selected")
+    return `Using ${String(payload.runtime || "agent runtime")}`;
+  if (eventType === "agent:thinking")
+    return String(payload.label || "Thinking");
+  if (eventType === "tool:call") {
+    const name = String(payload.name || "tool");
+    const summary = detail(
+      args.command,
+      args.filePath,
+      args.path,
+      args.pattern,
+      args.url,
+      args.description,
+    );
+    return summary ? `${name}: ${summary}` : `Running ${name}`;
+  }
+  if (eventType === "tool:result")
+    return `Finished ${String(payload.name || "tool")}`;
+  if (eventType === "tool:error")
+    return `Failed ${String(payload.name || "tool")}`;
+  if (eventType === "task:start")
+    return `Started ${String(payload.agentName || "subagent")}: ${String(payload.description || "Working")}`;
+  if (eventType === "task:update")
+    return String(payload.content || "Subagent working");
+  if (eventType === "task:complete") return "Subagent finished";
+  if (eventType === "task:error")
+    return String(payload.errorMessage || "Subagent failed");
+  return "";
+}
+
 function updateExecutionInCache(
   queryClient: ReturnType<typeof useQueryClient>,
   workspaceId: string,
@@ -74,7 +149,7 @@ function openExecutionStream(
       };
 
       const eventType = parsed.data?.eventType;
-      const payload = parsed.data?.payload;
+      const payload = (parsed.data?.payload || {}) as Record<string, unknown>;
       if (!eventType || !payload) return;
 
       if (eventType === "status" && payload.status) {
@@ -83,6 +158,31 @@ function openExecutionStream(
           workspaceId,
           executionId,
           (execution) => ({ ...execution, status: payload.status as any }),
+        );
+      }
+
+      const liveLabel = buildLiveLabel(eventType, payload);
+      if (liveLabel) {
+        updateExecutionInCache(
+          queryClient,
+          workspaceId,
+          executionId,
+          (execution) => {
+            const current = readExecutionResult(execution.result);
+            const live = [...(current.live || []), liveLabel].slice(-8);
+
+            return {
+              ...execution,
+              status:
+                execution.status === "queued" ? "running" : execution.status,
+              result: JSON.stringify({
+                text: current.text,
+                usage: current.usage ?? null,
+                current: liveLabel,
+                live,
+              }),
+            };
+          },
         );
       }
 
@@ -97,7 +197,8 @@ function openExecutionStream(
           workspaceId,
           executionId,
           (execution) => {
-            const existingText = readExecutionText(execution.result);
+            const current = readExecutionResult(execution.result);
+            const existingText = current.text;
             const mergedText = existingText + assistantTextBuffer;
 
             return {
@@ -106,12 +207,25 @@ function openExecutionStream(
               result: JSON.stringify({
                 text: mergedText,
                 usage: payload.usage ?? null,
+                current: current.current ?? "Responding",
+                live: current.live ?? [],
               }),
             };
           },
         );
 
         assistantTextBuffer = "";
+      }
+
+      if (
+        eventType === "task:start" ||
+        eventType === "task:update" ||
+        eventType === "task:complete" ||
+        eventType === "task:error"
+      ) {
+        queryClient.invalidateQueries({
+          queryKey: ["agent-tasks", executionId],
+        });
       }
     } catch {
       // ignore malformed stream event payload
@@ -177,8 +291,66 @@ function openExecutionStream(
     source.close();
   });
 
-  source.onerror = () => {
+  source.addEventListener("execution:conflicted", (event) => {
+    try {
+      const parsed = JSON.parse((event as MessageEvent).data) as {
+        data?: {
+          status?: string;
+          result?: unknown;
+          errorMessage?: string | null;
+        };
+      };
+
+      updateExecutionInCache(
+        queryClient,
+        workspaceId,
+        executionId,
+        (execution) => ({
+          ...execution,
+          status: (parsed.data?.status || "conflicted") as any,
+          result:
+            parsed.data?.result !== undefined
+              ? JSON.stringify(parsed.data.result)
+              : execution.result,
+          errorMessage: parsed.data?.errorMessage ?? execution.errorMessage,
+        }),
+      );
+    } catch {
+      // ignore malformed conflict payload
+    }
+
+    queryClient.invalidateQueries({ queryKey: ["artifacts", executionId] });
+
     source.close();
+  });
+
+  source.onerror = () => {
+    updateExecutionInCache(
+      queryClient,
+      workspaceId,
+      executionId,
+      (execution) => {
+        if (execution.status !== "running" && execution.status !== "queued") {
+          return execution;
+        }
+
+        const current = readExecutionResult(execution.result);
+        return {
+          ...execution,
+          result: JSON.stringify({
+            text: current.text,
+            usage: current.usage ?? null,
+            current: "Stream disconnected. Refreshing execution status...",
+            live: [
+              ...(current.live || []),
+              "Stream disconnected. Refreshing execution status...",
+            ].slice(-8),
+          }),
+        };
+      },
+    );
+
+    queryClient.invalidateQueries({ queryKey: ["executions", workspaceId] });
   };
 }
 
@@ -213,10 +385,15 @@ export function useProjectActions({
       prompt,
       modelId,
       threadId,
+      editorContext,
     }: {
       prompt: string;
       modelId?: string;
       threadId?: string;
+      editorContext?: {
+        activeFilePath?: string;
+        visibleContent?: string;
+      };
     }) => {
       if (!workspaceId) throw new Error("Workspace not found");
       return createExecution({
@@ -224,6 +401,7 @@ export function useProjectActions({
         prompt,
         modelId,
         threadId,
+        editorContext,
       });
     },
     onSuccess: (response) => {

@@ -33,6 +33,7 @@ import { env } from "@/config/env";
 import { getWorkspaceTools } from "./tools";
 import { withWorkspaceLock } from "./lib/workspace-lock";
 import { withRetry, isDoomLoop, classifyError } from "./lib/retry";
+import { runDeepAgentsExecution } from "./lib/deepagents-runtime";
 
 // ** import agents
 import {
@@ -64,6 +65,8 @@ const CHECKPOINT_INTERVAL = 10;
 
 /** Update execution.updatedAt every N milliseconds (heartbeat). */
 const HEARTBEAT_INTERVAL_MS = 30_000;
+
+const eventQueues = new Map<string, Promise<number>>();
 
 // ─── Utility helpers ─────────────────────────────────────────────────────────
 
@@ -178,24 +181,35 @@ async function appendExecutionEvent(
   type: string,
   payload: unknown,
 ) {
-  const [last] = await db
-    .select({ seq: executionEvent.seq })
-    .from(executionEvent)
-    .where(eq(executionEvent.executionId, executionId))
-    .orderBy(desc(executionEvent.seq))
-    .limit(1);
+  const previous = eventQueues.get(executionId) ?? Promise.resolve(0);
 
-  const nextSeq = (last?.seq ?? 0) + 1;
+  const next = previous.then(async () => {
+    const [last] = await db
+      .select({ seq: executionEvent.seq })
+      .from(executionEvent)
+      .where(eq(executionEvent.executionId, executionId))
+      .orderBy(desc(executionEvent.seq))
+      .limit(1);
 
-  await db.insert(executionEvent).values({
-    id: newId(),
-    executionId,
-    seq: nextSeq,
-    type,
-    payloadJson: payload,
+    const nextSeq = (last?.seq ?? 0) + 1;
+
+    await db.insert(executionEvent).values({
+      id: newId(),
+      executionId,
+      seq: nextSeq,
+      type,
+      payloadJson: payload,
+    });
+
+    return nextSeq;
   });
 
-  return nextSeq;
+  eventQueues.set(
+    executionId,
+    next.catch(() => 0),
+  );
+
+  return next;
 }
 
 // ─── Thread helpers ───────────────────────────────────────────────────────────
@@ -228,11 +242,52 @@ async function getOrCreateThreadId(execRecord: typeof execution.$inferSelect) {
   return threadId;
 }
 
+async function getEditorContext(executionId: string): Promise<
+  | {
+      activeFilePath?: string | null;
+      visibleContent?: string | null;
+    }
+  | undefined
+> {
+  const [row] = await db
+    .select({ payload: executionEvent.payloadJson })
+    .from(executionEvent)
+    .where(
+      and(
+        eq(executionEvent.executionId, executionId),
+        eq(executionEvent.type, "editor:context"),
+      ),
+    )
+    .orderBy(desc(executionEvent.seq))
+    .limit(1);
+
+  if (!row?.payload || typeof row.payload !== "object") return undefined;
+
+  const payload = row.payload as {
+    activeFilePath?: unknown;
+    visibleContent?: unknown;
+  };
+
+  return {
+    activeFilePath:
+      typeof payload.activeFilePath === "string"
+        ? payload.activeFilePath
+        : null,
+    visibleContent:
+      typeof payload.visibleContent === "string"
+        ? payload.visibleContent
+        : null,
+  };
+}
+
 async function buildThreadMessages(
   execRecord: typeof execution.$inferSelect,
   systemPrompt: string,
 ) {
-  const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
+  const messages: ChatMessage[] = [];
+  if (systemPrompt.trim()) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
   const threadId = await getOrCreateThreadId(execRecord);
 
   const threadMessages = await db
@@ -290,7 +345,7 @@ Task: ${prompt}
 Respond with ONLY the word "single" or "multi" — nothing else.`;
 
     const response = await ai.chat({
-      model: "gemini-2.0-flash",
+      model: "gemini-3-flash-preview",
       messages: [{ role: "user", content: classificationPrompt }],
     });
 
@@ -763,12 +818,7 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
       throw new Error(`Failed to config git worktree: ${err}`);
     }
 
-    if (!env.GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not configured in worker environment");
-    }
-
-    const ai = new GeminiProvider({ apiKey: env.GEMINI_API_KEY });
-    const modelId = execRecord.modelId ?? "gemini-2.0-flash";
+    const modelId = execRecord.modelId ?? "gemini-3-flash-preview";
 
     // ── Load user-defined agents & merge with built-ins ───────────────────
     const userAgents = await loadUserAgents(workspacePath);
@@ -783,104 +833,78 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
       startedAt: new Date().toISOString(),
     });
 
-    // ── Task classification ────────────────────────────────────────────────
-    let classification: "single" | "multi" = "single";
+    await db
+      .update(execution)
+      .set({
+        status: "running",
+        startedAt: new Date(),
+        runtime: "deepagents",
+        runtimeExecutionId: execRecord.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(execution.id, execRecord.id));
 
-    // Only classify if this is the root execution (not a sub-agent)
-    if (!execRecord.parentExecutionId) {
-      classification = await classifyTask(execRecord.prompt, ai);
-
-      await db
-        .update(execution)
-        .set({ classification })
-        .where(eq(execution.id, execRecord.id));
-
-      logEvent(`Task classified as: ${classification}`);
-      await appendExecutionEvent(execRecord.id, "classification", {
-        classification,
-      });
-    } else {
-      // Sub-agent executions are always single
-      classification = "single";
-    }
-
-    // ── Choose agent & system prompt ──────────────────────────────────────
-    const agentName =
-      classification === "multi"
-        ? "orchestrator"
-        : (execRecord.agentName ?? "coder");
-
-    const agentDef = getAgentDefinitionFromMerged(agentName, agentRegistry);
-
-    const toolsForManifest = getWorkspaceTools(
-      worktreeDir,
-      agentName,
-      agentName === "orchestrator"
-        ? {
-            rootExecutionId: execRecord.id,
-            workspaceId: execRecord.workspaceId,
-            modelId,
-            worktreeDir,
-            agentRegistry,
-          }
-        : undefined,
+    const agentName = "deepagents";
+    const editorContext = await getEditorContext(execRecord.id);
+    const { messages, threadId } = await buildThreadMessages(execRecord, "");
+    const conversationHistory = messages.filter(
+      (message) => message.role !== "system",
     );
 
-    const toolManifest = toolsForManifest
-      .map((t) => `- ${t.name}: ${t.description}`)
-      .join("\n");
-
-    const baseSystemPrompt = agentDef
-      ? `${agentDef.systemPrompt}\n\nActive workspace path: ${worktreeDir}\nAvailable tools:\n${toolManifest}`
-      : `You are VIBECode, an expert AI programming assistant.
-You have been given a task to complete within a specific workspace.
-Active workspace path: ${worktreeDir}
-Available tools in this session:
-${toolManifest}
-Always perform real code changes using tools when code/files are requested.
-Never dump full HTML/CSS/JS/TS files in chat for implementation requests.
-Write files to the workspace via tools, then report concise results.
-If a request says "write/create/build/run", you MUST use tools before final answer.
-Never ask the user to choose a command when execute_command is available.
-Pick a sensible default command and run it.
-execute_command expects a complete command string and you must decide it yourself.
-For long-running dev servers, run a short verification command instead of waiting forever.
-Keep final responses concise and action-oriented.
-Think step-by-step and complete the objective.`;
-
-    const { messages, threadId } = await buildThreadMessages(
-      execRecord,
-      baseSystemPrompt,
-    );
-
-    const maxSteps = agentDef?.maxSteps ?? 50;
-
-    await appendExecutionEvent(execRecord.id, "agent:selected", {
-      agentName,
-      classification,
-      maxSteps,
+    await appendExecutionEvent(execRecord.id, "runtime:selected", {
+      runtime: "deepagents",
+      modelId,
     });
 
-    // ── Run agent loop ────────────────────────────────────────────────────
     const {
       finalContent,
       finalUsage,
       steps: step,
       isCancelled,
-    } = await runAgentLoop({
+      classification,
+      selectedSkillSources,
+      runtimeExecutionId,
+    } = await runDeepAgentsExecution({
       executionId: execRecord.id,
-      workspaceId: execRecord.workspaceId,
-      agentName,
-      messages,
-      ai,
-      modelId,
       worktreeDir,
-      maxSteps,
-      logEvent,
+      modelId,
+      prompt: execRecord.prompt,
+      history: conversationHistory
+        .filter(
+          (
+            message,
+          ): message is { role: "user" | "assistant"; content: string } =>
+            message.role === "user" || message.role === "assistant",
+        )
+        .map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
+      editorContext,
       agentRegistry,
+      appendExecutionEvent,
+      logEvent,
+    });
+
+    await db
+      .update(execution)
+      .set({
+        classification,
+        runtime: "deepagents",
+        runtimeExecutionId,
+        selectedSkillsJson:
+          selectedSkillSources.length > 0
+            ? JSON.stringify(selectedSkillSources)
+            : null,
+      })
+      .where(eq(execution.id, execRecord.id));
+
+    await appendExecutionEvent(execRecord.id, "classification", {
+      classification,
     });
 
     let mergeError = "";
+    let mergeStatus: "completed" | "conflicted" | "failed" = "completed";
     let mergedCommitHash = "";
 
     // ── Granular git checkpoint ───────────────────────────────────────────
@@ -951,13 +975,22 @@ Think step-by-step and complete the objective.`;
                 );
                 mergedCommitHash = hashOut.trim();
               } catch (err) {
+                const errorMessage =
+                  err instanceof Error ? err.message : String(err);
                 logger.warn(
-                  `Merge failed for execution ${execRecord.id}: ${err}`,
+                  `Merge failed for execution ${execRecord.id}: ${errorMessage}`,
                 );
                 await execAsync(`git merge --abort`, {
                   cwd: workspacePath,
                 }).catch(() => {});
-                mergeError = `Merge conflict with another parallel agent. The agent's work was saved to branch ${branchName} but could not be automatically merged into main.`;
+                const isConflict =
+                  /CONFLICT|would be overwritten by merge|Merge with strategy/i.test(
+                    errorMessage,
+                  );
+                mergeStatus = isConflict ? "conflicted" : "failed";
+                mergeError = isConflict
+                  ? `Merge conflict with another parallel agent. The agent's work was saved to branch ${branchName} but could not be automatically merged into main.`
+                  : `Execution finished, but the final workspace merge failed: ${errorMessage}. The agent's work is preserved on branch ${branchName}.`;
               }
             },
           );
@@ -967,11 +1000,19 @@ Think step-by-step and complete the objective.`;
           );
         }
       } catch (err) {
-        logger.warn(`Failed to process worktree git commit: ${err}`);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        logger.warn(`Failed to process worktree git commit: ${errorMessage}`);
+        mergeStatus = "failed";
+        mergeError = `Execution finished, but preparing or merging git changes failed: ${errorMessage}. The agent's work is preserved on branch ${branchName}.`;
       }
     }
 
-    const finalText = finalContent.trim();
+    const finalText = [
+      finalContent.trim(),
+      mergeError ? `\n\nMerge note: ${mergeError}` : "",
+    ]
+      .filter(Boolean)
+      .join("");
     const resultPayload = JSON.stringify({
       text: finalText,
       usage: finalUsage,
@@ -1008,16 +1049,15 @@ Think step-by-step and complete the objective.`;
       },
     );
 
-    if (mergeError) throw new Error(mergeError);
-
     // ── Persist results ───────────────────────────────────────────────────
     await db.transaction(async (tx) => {
       if (!isCancelled) {
         await tx
           .update(execution)
           .set({
-            status: "completed",
+            status: mergeError ? mergeStatus : "completed",
             result: resultPayload,
+            errorMessage: mergeError || null,
             completedAt: new Date(),
             mergedCommitHash: mergedCommitHash || null,
             worktreeBranch: branchName,
@@ -1094,15 +1134,23 @@ Think step-by-step and complete the objective.`;
     });
 
     if (!isCancelled) {
+      const finalStatus = mergeError ? mergeStatus : "completed";
       await appendExecutionEvent(execRecord.id, "status", {
-        status: "completed",
+        status: finalStatus,
         completedAt: new Date().toISOString(),
         usage: finalUsage,
         steps: step,
         agentName,
         classification,
+        errorMessage: mergeError || undefined,
       });
-      logger.info(`Execution ${execRecord.id} completed successfully.`);
+      logger.info(
+        mergeError
+          ? mergeError.includes("Merge conflict")
+            ? `Execution ${execRecord.id} completed with merge conflict.`
+            : `Execution ${execRecord.id} completed with merge failure.`
+          : `Execution ${execRecord.id} completed successfully.`,
+      );
     } else {
       logger.info(`Execution ${execRecord.id} was cancelled gracefully.`);
     }

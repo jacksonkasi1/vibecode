@@ -18,6 +18,7 @@ export const executionStatusEnum = [
   "queued",
   "running",
   "completed",
+  "conflicted",
   "failed",
   "cancelled",
 ] as const;
@@ -62,6 +63,9 @@ export const execution = pgTable("execution", {
   agentName: text("agent_name").default("coder"),
   taskDescription: text("task_description"),
   classification: text("classification").$type<TaskClassification>(),
+  runtime: text("runtime").notNull().default("deepagents"),
+  runtimeExecutionId: text("runtime_execution_id"),
+  selectedSkillsJson: text("selected_skills_json"),
 });
 
 export const agentTask = pgTable(
@@ -84,8 +88,11 @@ export const agentTask = pgTable(
       .default("pending"),
     result: text("result"),
     errorMessage: text("error_message"),
+    runtimeTaskKey: text("runtime_task_key"),
+    metadataJson: text("metadata_json"),
     steps: integer("steps").default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
     completedAt: timestamp("completed_at"),
   },
   (table) => ({

@@ -38,6 +38,7 @@ import { useProjectActions } from "@/pages/project/hooks/use-project-actions";
 import { useProjectData } from "@/pages/project/hooks/use-project-data";
 
 // ** import apis
+import { getArtifacts } from "@/rest-api/artifacts";
 import { getModels } from "@/rest-api/models";
 
 export default function Project() {
@@ -49,7 +50,7 @@ export default function Project() {
   const { id: projectId = "" } = useParams();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
-  const { project, workspace, threads, executions, artifacts, isLoading } =
+  const { project, workspace, threads, executions, isLoading } =
     useProjectData(projectId);
   const {
     renameProject,
@@ -113,6 +114,19 @@ export default function Project() {
     () => activeExecutions[activeExecutions.length - 1],
     [activeExecutions],
   );
+  const { data: artifactsRes } = useQuery({
+    queryKey: ["artifacts", latestExecution?.id],
+    queryFn: () =>
+      latestExecution?.id
+        ? getArtifacts(latestExecution.id)
+        : Promise.resolve({ data: [] }),
+    enabled: !!latestExecution?.id,
+  });
+  const artifacts = useMemo(
+    () =>
+      (artifactsRes?.data || []).filter((artifact) => artifact.type === "file"),
+    [artifactsRes?.data],
+  );
   const editorTheme = resolvedTheme === "light" ? "vs" : "vs-dark";
 
   const detectLanguage = (file: Artifact | null) => {
@@ -142,6 +156,17 @@ export default function Project() {
     return file.metadata || `// ${file.name}\n// Content preview unavailable.`;
   };
 
+  const getVisibleEditorContext = (file: Artifact | null) => {
+    if (!file) return undefined;
+
+    const content = getEditorContent(file);
+
+    return {
+      activeFilePath: file.filePath || file.name,
+      visibleContent: content.slice(0, 4000),
+    };
+  };
+
   const previewSource = useMemo(() => {
     const htmlArtifact = artifacts.find((artifact) =>
       artifact.name.toLowerCase().endsWith(".html"),
@@ -149,12 +174,106 @@ export default function Project() {
 
     if (!htmlArtifact) return null;
 
+    const resolveAssetPath = (basePath: string, target: string) => {
+      if (
+        !target ||
+        /^(https?:)?\/\//i.test(target) ||
+        target.startsWith("/")
+      ) {
+        return target.replace(/^\//, "");
+      }
+
+      const cleanTarget = target.split("?")[0]?.split("#")[0] || target;
+      const baseParts = basePath.split("/").filter(Boolean);
+      baseParts.pop();
+
+      for (const part of cleanTarget.split("/")) {
+        if (!part || part === ".") continue;
+        if (part === "..") {
+          baseParts.pop();
+          continue;
+        }
+        baseParts.push(part);
+      }
+
+      return baseParts.join("/");
+    };
+
+    const readArtifact = (filePath: string) => {
+      const match = artifacts.find(
+        (artifact) =>
+          artifact.filePath === filePath || artifact.name === filePath,
+      );
+      if (!match?.metadata) return null;
+
+      try {
+        const metadata = JSON.parse(match.metadata) as { content?: unknown };
+        return typeof metadata.content === "string" ? metadata.content : null;
+      } catch {
+        return null;
+      }
+    };
+
     try {
       const metadata = htmlArtifact.metadata
         ? JSON.parse(htmlArtifact.metadata)
         : null;
       if (metadata?.content && typeof metadata.content === "string") {
-        return metadata.content;
+        let html = metadata.content as string;
+
+        html = html.replace(
+          /<link\s+([^>]*?)rel=["']stylesheet["']([^>]*?)href=["']([^"']+)["']([^>]*?)>/gi,
+          (
+            full,
+            before: string,
+            middle: string,
+            href: string,
+            after: string,
+          ) => {
+            if (/^(https?:)?\/\//i.test(href)) return full;
+            const css = readArtifact(
+              resolveAssetPath(
+                htmlArtifact.filePath || htmlArtifact.name,
+                href,
+              ),
+            );
+            if (!css) return full;
+            const attrs = `${before}${middle}${after}`.trim();
+            return `<style data-preview-inline="${href}"${attrs ? ` ${attrs}` : ""}>${css}</style>`;
+          },
+        );
+
+        html = html.replace(
+          /<script\s+([^>]*?)src=["']([^"']+)["']([^>]*?)><\/script>/gi,
+          (full, before: string, src: string, after: string) => {
+            if (/^(https?:)?\/\//i.test(src)) return full;
+            const js = readArtifact(
+              resolveAssetPath(htmlArtifact.filePath || htmlArtifact.name, src),
+            );
+            if (!js) return full;
+            const attrs = `${before}${after}`.trim();
+            return `<script data-preview-inline="${src}"${attrs ? ` ${attrs}` : ""}>${js}<\/script>`;
+          },
+        );
+
+        html = html.replace("</head>", `<base href="about:srcdoc" />\n</head>`);
+
+        html = html.replace(
+          "</body>",
+          `<script>
+document.addEventListener("click", function (event) {
+  var link = event.target instanceof Element ? event.target.closest("a") : null;
+  if (!link) return;
+  var href = link.getAttribute("href") || "";
+  if (!href || href.startsWith("#") || href.startsWith("javascript:") || /^(https?:|mailto:|tel:)/i.test(href)) {
+    return;
+  }
+  event.preventDefault();
+});
+</script>\n</body>`,
+        );
+
+        return html;
       }
     } catch {
       return null;
@@ -190,13 +309,23 @@ export default function Project() {
 
   // Set default selected file
   useEffect(() => {
-    if (artifacts.length > 0 && !selectedFile) {
-      const mainFile =
-        artifacts.find(
-          (a) => a.name.includes("App") || a.name.includes("index"),
-        ) || artifacts[0];
-      setSelectedFile(mainFile);
+    if (artifacts.length === 0) {
+      setSelectedFile(null);
+      return;
     }
+
+    if (
+      selectedFile &&
+      artifacts.some((artifact) => artifact.id === selectedFile.id)
+    ) {
+      return;
+    }
+
+    const mainFile =
+      artifacts.find(
+        (a) => a.name.includes("App") || a.name.includes("index"),
+      ) || artifacts[0];
+    setSelectedFile(mainFile);
   }, [artifacts, selectedFile]);
 
   const handleFinishRename = () => {
@@ -310,6 +439,7 @@ export default function Project() {
                       prompt,
                       modelId,
                       threadId: activeThreadId || undefined,
+                      editorContext: getVisibleEditorContext(selectedFile),
                     },
                     {
                       onSuccess: (res: any) => {
@@ -475,7 +605,7 @@ export default function Project() {
                     {previewSource ? (
                       <iframe
                         title="App preview"
-                        sandbox="allow-scripts allow-same-origin"
+                        sandbox="allow-scripts"
                         srcDoc={previewSource}
                         className="h-full w-full bg-background"
                       />
@@ -603,7 +733,9 @@ export default function Project() {
                     onClick={() =>
                       runPrompt({
                         prompt: "Re-run current logic",
-                        modelId: latestExecution?.modelId || "gemini-2.0-flash",
+                        modelId:
+                          latestExecution?.modelId || "gemini-3-flash-preview",
+                        editorContext: getVisibleEditorContext(selectedFile),
                       })
                     }
                     className="flex items-center gap-1.5 text-vibe-success hover:text-foreground hover:bg-vibe-success/20 px-2 py-0.5 rounded transition-all"
