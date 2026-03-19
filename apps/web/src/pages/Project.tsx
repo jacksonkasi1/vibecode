@@ -1,11 +1,12 @@
 // ** import types
 import type { KeyboardEvent } from "react";
-import type { Artifact } from "@repo/db";
+import type { Artifact, Execution } from "@repo/db";
 
 // ** import core packages
 import { Editor } from "@monaco-editor/react";
 import {
   ArrowLeft,
+  Bot,
   ChevronRight,
   ChevronDown,
   FileCode,
@@ -16,7 +17,6 @@ import {
   Pencil,
   Plus,
   Terminal as TerminalIcon,
-  UserPlus,
   MoreHorizontal,
   Square,
   Play,
@@ -31,7 +31,7 @@ import { useTheme } from "next-themes";
 // ** import components
 import { VibeAssistantThread } from "@/components/assistant/vibe-assistant-thread";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { ModeToggle } from "@/components/ui/mode-toggle";
+import { ExecutionInspector } from "@/components/project/execution-inspector";
 
 // ** import hooks
 import { useProjectActions } from "@/pages/project/hooks/use-project-actions";
@@ -57,7 +57,6 @@ export default function Project() {
     runPrompt,
     isPromptRunning,
     cancelPrompt,
-    undoToPrompt,
     renameThread,
     deleteThread,
   } = useProjectActions({
@@ -106,6 +105,9 @@ export default function Project() {
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
   const [selectedFile, setSelectedFile] = useState<Artifact | null>(null);
   const [workspaceTab, setWorkspaceTab] = useState<"app" | "code">("code");
+  const [inspectorTab, setInspectorTab] = useState<
+    "details" | "timeline" | "changes"
+  >("timeline");
   const [editorWordWrap, setEditorWordWrap] = useState(false);
   const [editorFontSize, setEditorFontSize] = useState(13);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
@@ -114,6 +116,10 @@ export default function Project() {
     () => activeExecutions[activeExecutions.length - 1],
     [activeExecutions],
   );
+  const previousExecution = useMemo<Execution | null>(() => {
+    if (activeExecutions.length < 2) return null;
+    return activeExecutions[activeExecutions.length - 2] ?? null;
+  }, [activeExecutions]);
   const { data: artifactsRes } = useQuery({
     queryKey: ["artifacts", latestExecution?.id],
     queryFn: () =>
@@ -127,7 +133,35 @@ export default function Project() {
       (artifactsRes?.data || []).filter((artifact) => artifact.type === "file"),
     [artifactsRes?.data],
   );
+  const { data: previousArtifactsRes } = useQuery({
+    queryKey: ["artifacts", previousExecution?.id],
+    queryFn: () =>
+      previousExecution?.id
+        ? getArtifacts(previousExecution.id)
+        : Promise.resolve({ data: [] }),
+    enabled: !!previousExecution?.id,
+  });
+  const previousArtifacts = useMemo(
+    () =>
+      (previousArtifactsRes?.data || []).filter(
+        (artifact) => artifact.type === "file",
+      ),
+    [previousArtifactsRes?.data],
+  );
+  const displayedArtifacts = useMemo(
+    () => (artifacts.length > 0 ? artifacts : previousArtifacts),
+    [artifacts, previousArtifacts],
+  );
   const editorTheme = resolvedTheme === "light" ? "vs" : "vs-dark";
+
+  useEffect(() => {
+    if (
+      latestExecution?.status === "running" ||
+      latestExecution?.status === "queued"
+    ) {
+      setInspectorTab("timeline");
+    }
+  }, [latestExecution?.id, latestExecution?.status]);
 
   const detectLanguage = (file: Artifact | null) => {
     if (!file) return "typescript";
@@ -168,7 +202,7 @@ export default function Project() {
   };
 
   const previewSource = useMemo(() => {
-    const htmlArtifact = artifacts.find((artifact) =>
+    const htmlArtifact = displayedArtifacts.find((artifact) =>
       artifact.name.toLowerCase().endsWith(".html"),
     );
 
@@ -200,7 +234,7 @@ export default function Project() {
     };
 
     const readArtifact = (filePath: string) => {
-      const match = artifacts.find(
+      const match = displayedArtifacts.find(
         (artifact) =>
           artifact.filePath === filePath || artifact.name === filePath,
       );
@@ -280,7 +314,7 @@ document.addEventListener("click", function (event) {
     }
 
     return null;
-  }, [artifacts]);
+  }, [displayedArtifacts]);
 
   useEffect(() => {
     if (project?.name && !isEditingProjectName)
@@ -309,24 +343,24 @@ document.addEventListener("click", function (event) {
 
   // Set default selected file
   useEffect(() => {
-    if (artifacts.length === 0) {
+    if (displayedArtifacts.length === 0) {
       setSelectedFile(null);
       return;
     }
 
     if (
       selectedFile &&
-      artifacts.some((artifact) => artifact.id === selectedFile.id)
+      displayedArtifacts.some((artifact) => artifact.id === selectedFile.id)
     ) {
       return;
     }
 
     const mainFile =
-      artifacts.find(
+      displayedArtifacts.find(
         (a) => a.name.includes("App") || a.name.includes("index"),
-      ) || artifacts[0];
+      ) || displayedArtifacts[0];
     setSelectedFile(mainFile);
-  }, [artifacts, selectedFile]);
+  }, [displayedArtifacts, selectedFile]);
 
   const handleFinishRename = () => {
     if (localProjectName.trim() && localProjectName !== project?.name) {
@@ -455,15 +489,6 @@ document.addEventListener("click", function (event) {
                 runningModelId={
                   isAnyExecutionRunning ? latestExecution?.modelId : undefined
                 }
-                onUndoToMessage={(execId, promptText) => {
-                  if (
-                    window.confirm(
-                      "Are you sure you want to revert the codebase to before this prompt? This action will undo all code changes made by this prompt and any subsequent prompts. You can still view them in history.",
-                    )
-                  ) {
-                    undoToPrompt(execId);
-                  }
-                }}
                 onRenameThread={(threadId, title) =>
                   renameThread({ threadId, title })
                 }
@@ -543,6 +568,29 @@ document.addEventListener("click", function (event) {
                     </span>
                   ) : null}
                 </div>
+                <div className="hidden items-center gap-1 rounded-md border border-border/40 bg-secondary/20 p-0.5 lg:flex">
+                  {(
+                    [
+                      ["details", "Details"],
+                      ["timeline", "Timeline"],
+                      ["changes", "Changes"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setInspectorTab(value)}
+                      className={[
+                        "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
+                        inspectorTab === value
+                          ? "bg-background text-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      ].join(" ")}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <button className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-colors">
                   <Github className="size-3.5 text-muted-foreground" />
                 </button>
@@ -576,12 +624,12 @@ document.addEventListener("click", function (event) {
                         src
                       </span>
                     </div>
-                    {artifacts.length === 0 ? (
+                    {displayedArtifacts.length === 0 ? (
                       <div className="px-8 py-3 text-xs text-muted-foreground/50 italic font-medium">
                         No files synthesized
                       </div>
                     ) : (
-                      artifacts.map((file) => (
+                      displayedArtifacts.map((file) => (
                         <div
                           key={file.id}
                           onClick={() => setSelectedFile(file)}
@@ -704,6 +752,25 @@ document.addEventListener("click", function (event) {
                   </>
                 )}
               </div>
+
+              <ExecutionInspector
+                execution={latestExecution ?? null}
+                previousExecution={previousExecution}
+                artifacts={artifacts}
+                previousArtifacts={previousArtifacts}
+                activeTab={inspectorTab}
+                editorTheme={editorTheme}
+                onOpenFile={(path) => {
+                  const match = displayedArtifacts.find(
+                    (artifact) =>
+                      artifact.filePath === path || artifact.name === path,
+                  );
+                  if (match) {
+                    setSelectedFile(match);
+                    setWorkspaceTab("code");
+                  }
+                }}
+              />
             </div>
 
             {/* Terminal Area */}
@@ -735,6 +802,7 @@ document.addEventListener("click", function (event) {
                         prompt: "Re-run current logic",
                         modelId:
                           latestExecution?.modelId || "gemini-3-flash-preview",
+                        threadId: activeThreadId || undefined,
                         editorContext: getVisibleEditorContext(selectedFile),
                       })
                     }
@@ -772,6 +840,20 @@ document.addEventListener("click", function (event) {
                       vibe start --watch
                     </span>
                   </div>
+
+                  {latestExecution?.status === "running" ||
+                  latestExecution?.status === "queued" ? (
+                    <div className="mt-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 font-sans text-xs text-foreground/80">
+                      <div className="flex items-center gap-2 font-medium text-foreground/90">
+                        <Bot className="size-3.5 text-primary" />
+                        Timeline is live in the right inspector panel.
+                      </div>
+                      <div className="mt-1 text-muted-foreground">
+                        Open the Timeline tab to inspect thoughts, tool calls,
+                        sub-agents, and changes.
+                      </div>
+                    </div>
+                  ) : null}
 
                   {latestExecution ? (
                     <div className="mt-3 space-y-2 border-l border-border/30 pl-4 ml-1">

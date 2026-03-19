@@ -12,6 +12,7 @@ import cancelRoute from "./cancel";
 import undoRoute from "./undo";
 import streamRoute from "./stream";
 import agentsRoute from "./agents";
+import eventsRoute from "./events";
 
 // ** import types
 import type { AppEnv } from "@/types";
@@ -29,5 +30,6 @@ executionsRouter.route("/", cancelRoute);
 executionsRouter.route("/", undoRoute);
 executionsRouter.route("/", streamRoute);
 executionsRouter.route("/", agentsRoute);
+executionsRouter.route("/", eventsRoute);
 
 export default executionsRouter;

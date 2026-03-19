@@ -227,6 +227,10 @@ function openExecutionStream(
           queryKey: ["agent-tasks", executionId],
         });
       }
+
+      queryClient.invalidateQueries({
+        queryKey: ["execution-events", executionId],
+      });
     } catch {
       // ignore malformed stream event payload
     }
@@ -262,6 +266,9 @@ function openExecutionStream(
     }
 
     queryClient.invalidateQueries({ queryKey: ["artifacts", executionId] });
+    queryClient.invalidateQueries({
+      queryKey: ["execution-events", executionId],
+    });
 
     source.close();
   });
@@ -287,6 +294,9 @@ function openExecutionStream(
     }
 
     queryClient.invalidateQueries({ queryKey: ["artifacts", executionId] });
+    queryClient.invalidateQueries({
+      queryKey: ["execution-events", executionId],
+    });
 
     source.close();
   });
@@ -320,6 +330,9 @@ function openExecutionStream(
     }
 
     queryClient.invalidateQueries({ queryKey: ["artifacts", executionId] });
+    queryClient.invalidateQueries({
+      queryKey: ["execution-events", executionId],
+    });
 
     source.close();
   });
@@ -351,6 +364,9 @@ function openExecutionStream(
     );
 
     queryClient.invalidateQueries({ queryKey: ["executions", workspaceId] });
+    queryClient.invalidateQueries({
+      queryKey: ["execution-events", executionId],
+    });
   };
 }
 
