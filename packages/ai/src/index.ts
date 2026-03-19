@@ -12,6 +12,14 @@ export type {
   ProviderConfig,
 } from "./types";
 
+export type {
+  AgentMode,
+  AgentDefinition,
+  AgentTask,
+  AgentResult,
+  TaskClassification,
+} from "./agents/types";
+
 // ** import lib
 export { BaseProvider } from "./providers/base";
 export { GeminiProvider } from "./providers/gemini";
@@ -22,3 +30,15 @@ export {
   estimateTokenCount,
   estimateMessagesTokenCount,
 } from "./utils/token-counter";
+
+// ** import agents
+export {
+  AGENT_DEFINITIONS,
+  getAgentDefinition,
+  listAgents,
+  getSubAgents,
+  mergeUserAgents,
+  getAgentDefinitionFromMerged,
+} from "./agents/registry";
+
+export { loadUserAgents } from "./agents/loader";
