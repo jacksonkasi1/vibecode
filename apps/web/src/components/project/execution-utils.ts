@@ -112,9 +112,17 @@ export function extractRelatedPath(args: Record<string, unknown>) {
   return undefined;
 }
 
+const TERMINAL_EXECUTION_STATUSES = new Set([
+  "failed",
+  "completed",
+  "conflicted",
+  "cancelled",
+]);
+
 export function deriveTimelineData(
   events: ExecutionEvent[],
   tasks: AgentTask[],
+  executionStatus?: Execution["status"] | null,
 ) {
   const items: TimelineItem[] = [];
   const details: Record<string, TimelineItemDetail> = {};
@@ -304,6 +312,18 @@ export function deriveTimelineData(
         startedAt: String(task.createdAt),
         endedAt: task.completedAt ? String(task.completedAt) : undefined,
       });
+    }
+  }
+
+  // If the execution has reached a terminal state, any items still marked as
+  // "running" or "queued" never received their completion event (e.g. the
+  // worker was killed mid-run). Clamp them to "failed" so the UI doesn't
+  // show spinning loading icons for a stopped execution.
+  if (executionStatus && TERMINAL_EXECUTION_STATUSES.has(executionStatus)) {
+    for (const item of items) {
+      if (item.status === "running" || item.status === "queued") {
+        item.status = "failed";
+      }
     }
   }
 
