@@ -29,6 +29,13 @@
       "when": 1773855527167,
       "tag": "0003_mighty_ser_duncan",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773905324941,
+      "tag": "0004_unknown_earthquake",
+      "breakpoints": true
     }
   ]
 }

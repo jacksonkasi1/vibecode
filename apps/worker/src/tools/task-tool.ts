@@ -100,7 +100,7 @@ async function runSubAgent(opts: RunSubAgentOptions): Promise<{
   }
 
   const ai = new GeminiProvider({ apiKey: env.GEMINI_API_KEY! });
-  const effectiveModel = agentDef.model ?? modelId ?? "gemini-2.0-flash";
+  const effectiveModel = agentDef.model ?? modelId ?? "gemini-3-flash-preview";
 
   // Create an isolated worktree for this sub-agent (branched from parent's worktree)
   const workspacePath = path.join(env.WORKSPACE_DIR, workspaceId);
