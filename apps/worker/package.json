@@ -13,11 +13,16 @@
   },
   "dependencies": {
     "@google-cloud/pubsub": "^5.3.0",
+    "@langchain/google-genai": "^2.1.26",
+    "@langchain/langgraph": "^1.2.3",
+    "@langchain/langgraph-checkpoint": "^1.0.1",
     "@repo/ai": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/logs": "workspace:*",
     "@repo/shared": "workspace:*",
     "@t3-oss/env-core": "^0.10.1",
+    "deepagents": "^1.8.4",
+    "langchain": "^1.2.35",
     "zod": "^3.23.8"
   },
   "devDependencies": {

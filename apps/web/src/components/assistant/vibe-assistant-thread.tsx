@@ -154,7 +154,12 @@ function parseAssistantResponse(text: string, execId: string) {
 
 function extractExecutionTextAndUsage(result: string | null) {
   if (!result)
-    return { text: "", usage: null as null | { completionTokens?: number } };
+    return {
+      text: "",
+      usage: null as null | { completionTokens?: number },
+      current: "",
+      live: [] as string[],
+    };
 
   const extractFromParsed = (parsed: unknown) => {
     if (typeof parsed === "string") {
@@ -164,6 +169,8 @@ function extractExecutionTextAndUsage(result: string | null) {
         return {
           text: parsed,
           usage: null as null | { completionTokens?: number },
+          current: "",
+          live: [] as string[],
         };
       }
     }
@@ -172,6 +179,8 @@ function extractExecutionTextAndUsage(result: string | null) {
       return {
         text: result,
         usage: null as null | { completionTokens?: number },
+        current: "",
+        live: [] as string[],
       };
     }
 
@@ -180,12 +189,21 @@ function extractExecutionTextAndUsage(result: string | null) {
       usage?: { completionTokens?: number };
       content?: unknown;
       output?: unknown;
+      current?: unknown;
+      live?: unknown;
     };
+
+    const live = Array.isArray(maybe.live)
+      ? maybe.live.filter((item): item is string => typeof item === "string")
+      : [];
+    const current = typeof maybe.current === "string" ? maybe.current : "";
 
     if (typeof maybe.text === "string") {
       return {
         text: maybe.text,
         usage: maybe.usage ?? null,
+        current,
+        live,
       };
     }
 
@@ -193,6 +211,8 @@ function extractExecutionTextAndUsage(result: string | null) {
       return {
         text: maybe.content,
         usage: maybe.usage ?? null,
+        current,
+        live,
       };
     }
 
@@ -200,17 +220,30 @@ function extractExecutionTextAndUsage(result: string | null) {
       return {
         text: maybe.output,
         usage: maybe.usage ?? null,
+        current,
+        live,
       };
     }
 
-    return { text: result, usage: maybe.usage ?? null };
+    return { text: result, usage: maybe.usage ?? null, current, live };
   };
 
   try {
     return extractFromParsed(JSON.parse(result));
   } catch {
-    return { text: extractPartialJSONText(result), usage: null };
+    return {
+      text: extractPartialJSONText(result),
+      usage: null,
+      current: "",
+      live: [],
+    };
   }
+}
+
+function stripVisibleContext(text: string) {
+  return text
+    .replace(/\n?\[EDITOR CONTEXT\][\s\S]*?\[\/EDITOR CONTEXT\]/g, "")
+    .trim();
 }
 
 function buildTiming(
@@ -332,9 +365,13 @@ function formatElapsed(seconds: number) {
 function StreamingIndicator({
   modelName,
   startedAt,
+  current,
+  live,
 }: {
   modelName?: string;
   startedAt?: Date;
+  current?: string;
+  live?: string[];
 }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -367,6 +404,20 @@ function StreamingIndicator({
         <span aria-hidden>•</span>
         <span>{formatElapsed(elapsedSeconds)}</span>
       </div>
+      {current ? (
+        <div className="mt-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-sm text-foreground/85">
+          {current}
+        </div>
+      ) : null}
+      {live && live.length > 1 ? (
+        <div className="mt-2 space-y-1 text-xs text-muted-foreground/80">
+          {live.slice(-4, -1).map((item, index) => (
+            <div key={`${item}-${index}`} className="truncate">
+              {item}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -468,6 +519,9 @@ export function VibeAssistantThread({
   const runningExecution = [...executions]
     .reverse()
     .find((exec) => exec.status === "running" || exec.status === "queued");
+  const runningStatus = extractExecutionTextAndUsage(
+    runningExecution?.result ?? null,
+  );
 
   useEffect(() => {
     if (!isHistoryPanelOpen) return;
@@ -505,22 +559,31 @@ export function VibeAssistantThread({
   }, [threads, searchQuery]);
 
   const messages = executions.flatMap((exec) => {
-    const { text: assistantText, usage } = extractExecutionTextAndUsage(
-      exec.result,
-    );
+    const {
+      text: assistantText,
+      usage,
+      current,
+      live,
+    } = extractExecutionTextAndUsage(exec.result);
     const timing = buildTiming(exec, usage?.completionTokens);
 
     const base = {
       role: "user" as const,
-      content: [{ type: "text" as const, text: exec.prompt }],
+      content: [
+        { type: "text" as const, text: stripVisibleContext(exec.prompt) },
+      ],
       id: `u-${exec.id}`,
       createdAt: new Date(String(exec.createdAt)),
     };
 
-    if (exec.status === "failed") {
+    if (exec.status === "failed" || exec.status === "conflicted") {
       const existingParts = assistantText
         ? parseAssistantResponse(assistantText, exec.id)
         : [];
+      const heading =
+        exec.status === "conflicted"
+          ? "Execution completed with merge conflict."
+          : "Execution failed.";
       return [
         base,
         {
@@ -531,8 +594,8 @@ export function VibeAssistantThread({
               type: "text" as const,
               text:
                 existingParts.length > 0
-                  ? `\n\n**Execution failed.**\n${exec.errorMessage || "Unknown error"}`
-                  : `Execution failed.\n\n${exec.errorMessage || "Unknown error"}`,
+                  ? `\n\n**${heading}**\n${exec.errorMessage || "Unknown error"}`
+                  : `${heading}\n\n${exec.errorMessage || "Unknown error"}`,
             },
           ],
           metadata: timing ? { timing } : {},
@@ -947,6 +1010,8 @@ export function VibeAssistantThread({
                         ? new Date(String(runningExecution.createdAt))
                         : undefined
                     }
+                    current={runningStatus.current}
+                    live={runningStatus.live}
                   />
                 )}
               </div>

@@ -51,7 +51,7 @@ route.get("/:id/stream", async (c) => {
 
     // Poll for updates until execution is complete
     let currentStatus = found.status;
-    const terminalStatuses = ["completed", "failed", "cancelled"];
+    const terminalStatuses = ["completed", "conflicted", "failed", "cancelled"];
 
     while (true) {
       const eventRows = await db
@@ -66,6 +66,11 @@ route.get("/:id/stream", async (c) => {
         .orderBy(asc(executionEvent.seq));
 
       for (const row of eventRows) {
+        if (row.type === "editor:context") {
+          lastSeq = row.seq;
+          continue;
+        }
+
         lastSeq = row.seq;
         await stream.writeSSE({
           id: String(row.seq),
@@ -125,6 +130,11 @@ route.get("/:id/stream", async (c) => {
           .orderBy(asc(executionEvent.seq));
 
         for (const row of trailingEventRows) {
+          if (row.type === "editor:context") {
+            lastSeq = row.seq;
+            continue;
+          }
+
           lastSeq = row.seq;
           await stream.writeSSE({
             id: String(row.seq),

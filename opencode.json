@@ -13,6 +13,16 @@
       "type": "local",
       "command": ["context-mode"],
       "enabled": true
+    },
+    "context7": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@upstash/context7-mcp",
+        "--api-key",
+        "ctx7sk-6490e139-6ad8-4d5f-a3aa-ce91924d4234"
+      ]
     }
   },
   "plugin": ["context-mode"]

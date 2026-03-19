@@ -1,3 +1,46 @@
+# Skills and Capabilities Plan
+
+## Current decision
+
+- [ ] Use one shared capabilities model for `skills` now, with room for `agents` and `mcp` later.
+- [ ] Keep two scopes in product language: `This Project` and `All Projects`.
+- [ ] Treat `All Projects` as user-level, cloud-backed state that follows the user into new workspaces.
+- [ ] Treat `This Project` as workspace-local state that stays inside the current project only.
+- [ ] Keep local filesystem copies as runtime cache only; do not treat VM disk as the source of truth for global installs.
+
+## Installation paths
+
+- [ ] Support `skills.sh` terminal installs inside the workspace VM for developer workflows.
+- [ ] Support UI-based installs from anywhere for `All Projects` without requiring a workspace terminal.
+- [ ] Accept repo URL or compatible package source for global installs handled by the backend importer.
+- [ ] Make both install paths converge into the same registry, sync rules, and UI state.
+
+## UI direction
+
+- [ ] Add a lightweight `Capabilities` entry point using an icon button, drawer, or side panel instead of a heavy top-level tab.
+- [ ] Show scope switcher: `This Project` and `All Projects`.
+- [ ] In UI, support only `view`, `install`, `enable`, `disable`, and `delete`.
+- [ ] Do not build in-app editing for `SKILL.md` content.
+- [ ] Design the screen so `Skills` works now and `Agents` / `MCP` can reuse the same pattern later.
+
+## Runtime behavior
+
+- [ ] Merge capability precedence as `project > all-projects > built-in`.
+- [ ] Hydrate enabled global skills from cloud storage into each workspace at startup.
+- [ ] Detect terminal-installed skills and surface them in the same UI state model.
+- [ ] Keep skill injection runtime-focused: runner reads from local hydrated files, not directly from GCS.
+
+## Delivery order
+
+- [ ] Finalize capability data model and scope rules.
+- [ ] Implement backend metadata + GCS bundle storage for global skills.
+- [ ] Implement workspace hydration and merged loader support.
+- [ ] Implement backend importer for repo URL / package source.
+- [ ] Implement lightweight `Capabilities` UI for skills.
+- [ ] Add runtime skill selection and progressive disclosure after the storage and management flows are stable.
+
+---
+
 Here’s the **clean Notion-style version**.
 
 ## To-Do List and Checklist for Phase 1 & Phase 2
