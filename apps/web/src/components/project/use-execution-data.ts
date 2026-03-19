@@ -62,8 +62,8 @@ export function useExecutionData({
   const events = eventsRes?.data ?? [];
   const tasks = tasksRes?.data ?? [];
   const timelineData = useMemo(
-    () => deriveTimelineData(events, tasks),
-    [events, tasks],
+    () => deriveTimelineData(events, tasks, execution?.status),
+    [events, tasks, execution?.status],
   );
   const timelineItems = timelineData.items;
   const changes = useMemo(

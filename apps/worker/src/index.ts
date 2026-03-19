@@ -3,7 +3,7 @@ import { logger } from "@repo/logs";
 
 // ** import config
 import { env } from "@/config/env";
-import { startPoller } from "./poller";
+import { recoverStaleExecutions, startPoller } from "./poller";
 import { startPubSubListener } from "./pubsub";
 
 async function main() {
@@ -12,6 +12,10 @@ async function main() {
   logger.info(`Dispatch Mode: ${env.WORKER_DISPATCH_MODE}`);
   logger.info(`Polling Interval: ${env.POLL_INTERVAL_MS}ms`);
   logger.info(`Workspace Dir: ${env.WORKSPACE_DIR}`);
+
+  // Recover any executions left in "running" state from a previous worker
+  // process (crash / restart) before starting the dispatch loop.
+  await recoverStaleExecutions();
 
   if (env.WORKER_DISPATCH_MODE === "pubsub") {
     try {
