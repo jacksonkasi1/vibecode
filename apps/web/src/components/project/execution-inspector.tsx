@@ -713,10 +713,20 @@ export function ExecutionInspector({
                   </div>
                   <div className="min-h-0 flex-1">
                     <DiffEditor
+                      key={selectedChange.path}
                       theme={editorTheme}
                       original={selectedChange.before}
                       modified={selectedChange.after}
                       language={detectLanguageFromPath(selectedChange.path)}
+                      beforeMount={(monaco) => {
+                        // Clear any stale models for this path before mounting to prevent
+                        // "TextModel disposed before DiffEditorWidget reset" errors
+                        const uri = monaco.Uri.parse(
+                          `inmemory://diff/${selectedChange.path}`,
+                        );
+                        const existing = monaco.editor.getModel(uri);
+                        if (existing) existing.dispose();
+                      }}
                       options={{
                         readOnly: true,
                         minimap: { enabled: false },

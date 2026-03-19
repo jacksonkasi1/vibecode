@@ -551,12 +551,190 @@ export function VibeAssistantThread({
     },
   });
 
-  const runtimeKey = `${activeThreadId || "new"}:${runningExecution?.id || executions[executions.length - 1]?.id || "empty"}`;
-
   return (
-    <AssistantRuntimeProvider key={runtimeKey} runtime={runtime}>
+    <AssistantRuntimeProvider runtime={runtime}>
       <TooltipProvider>
-        <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col bg-background">
+        <ThreadPrimitive.Root className="relative flex h-full min-h-0 flex-col bg-background">
+          {/* History Overlay Panel */}
+          {isHistoryPanelOpen && (
+            <div
+              ref={historyPanelRef}
+              className="absolute inset-0 z-30 flex flex-col bg-background animate-in fade-in duration-200"
+            >
+              <div className="flex h-8 items-center justify-between border-b border-border/20 px-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsHistoryPanelOpen(false)}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <ChevronRight className="size-4 rotate-180" />
+                  </button>
+                  <span className="text-sm font-medium text-foreground">
+                    History
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <button
+                    onClick={() => {
+                      setIsMultiSelectMode((prev) => !prev);
+                      setSelectedThreadIds(new Set());
+                    }}
+                    className={`transition-colors hover:text-foreground text-xs px-2 py-0.5 rounded-sm border ${
+                      isMultiSelectMode
+                        ? "bg-secondary text-foreground border-border/50"
+                        : "border-transparent"
+                    }`}
+                    title="Select Multiple"
+                  >
+                    Select
+                  </button>
+                  <button
+                    onClick={() => {
+                      onSelectThread(null);
+                      setIsHistoryPanelOpen(false);
+                    }}
+                    className="transition-colors hover:text-foreground"
+                    title="New Chat"
+                  >
+                    <Plus className="size-4" />
+                  </button>
+                  <button
+                    onClick={() => setIsHistoryPanelOpen(false)}
+                    className="transition-colors hover:text-foreground"
+                    title="Close"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-b border-border/20 bg-background/50 px-0">
+                <div className="relative flex h-8 items-center">
+                  <Search className="absolute left-3 size-3.5 text-muted-foreground/60" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search threads..."
+                    className="h-full w-full bg-transparent pl-8 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
+                  />
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto scrollbar-none pb-4 bg-background">
+                {filteredThreads.length > 0 ? (
+                  <div className="flex flex-col">
+                    {filteredThreads.map((thread) => {
+                      const isActive = thread.id === activeThreadId;
+                      const isSelected = selectedThreadIds.has(thread.id);
+
+                      return (
+                        <div
+                          key={thread.id}
+                          className={[
+                            "group/history-item flex h-8 w-full cursor-pointer items-center justify-between px-3 text-left transition-colors duration-150 border-b border-border/10 last:border-0",
+                            isActive && !isMultiSelectMode
+                              ? "bg-secondary/60 text-foreground"
+                              : "bg-transparent text-foreground/90 hover:bg-secondary/40",
+                            isSelected ? "bg-primary/10" : "",
+                          ].join(" ")}
+                          onClick={() => {
+                            if (isMultiSelectMode) {
+                              const newSelected = new Set(selectedThreadIds);
+                              if (newSelected.has(thread.id)) {
+                                newSelected.delete(thread.id);
+                              } else {
+                                newSelected.add(thread.id);
+                              }
+                              setSelectedThreadIds(newSelected);
+                            } else {
+                              onSelectThread(thread.id);
+                              setIsHistoryPanelOpen(false);
+                            }
+                          }}
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
+                            {isMultiSelectMode && (
+                              <div
+                                className={`size-3.5 rounded border ${
+                                  isSelected
+                                    ? "bg-primary border-primary"
+                                    : "border-border"
+                                }`}
+                              />
+                            )}
+                            <div className="flex flex-1 justify-between min-w-0">
+                              <span className="truncate text-sm font-medium text-foreground/90">
+                                {thread.title || "Untitled Chat"}
+                              </span>
+                              <span className="text-xs text-muted-foreground/60 shrink-0">
+                                {new Date(thread.updatedAt).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                  },
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          {!isMultiSelectMode && (
+                            <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/history-item:opacity-100">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onDeleteThread) {
+                                    onDeleteThread(thread.id);
+                                  }
+                                }}
+                                className="inline-flex items-center justify-center text-muted-foreground/60 transition-colors hover:text-destructive pl-1"
+                                title="Delete chat"
+                              >
+                                <Trash2 className="size-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-2 px-2 py-8 text-center">
+                    <span className="text-sm text-muted-foreground/60">
+                      {searchQuery ? "No results found" : "No previous chats"}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {isMultiSelectMode && selectedThreadIds.size > 0 && (
+                <div className="border-t border-border/20 p-2 bg-background/95">
+                  <button
+                    onClick={() => {
+                      if (
+                        onDeleteThread &&
+                        window.confirm(
+                          `Are you sure you want to delete ${selectedThreadIds.size} thread(s)?`,
+                        )
+                      ) {
+                        for (const id of selectedThreadIds) {
+                          onDeleteThread(id);
+                        }
+                        setSelectedThreadIds(new Set());
+                        setIsMultiSelectMode(false);
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 rounded bg-destructive text-destructive-foreground px-3 py-1.5 text-xs font-bold transition-all hover:bg-destructive/90"
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete {selectedThreadIds.size} Selected
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto scrollbar-thin relative">
             {/* Thread Header overlay */}
             <div className="sticky top-0 z-20 h-8 border-b border-border/40 bg-background/95 px-2 backdrop-blur-xl flex items-center justify-between">
@@ -685,187 +863,15 @@ export function VibeAssistantThread({
               </div>
             </div>
 
-            {/* History Overlay Panel */}
-            {isHistoryPanelOpen && (
-              <div
-                ref={historyPanelRef}
-                className="absolute inset-0 top-8 z-30 flex flex-col bg-background animate-in fade-in duration-200"
-              >
-                <div className="flex h-8 items-center justify-between border-b border-border/20 px-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setIsHistoryPanelOpen(false)}
-                      className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <ChevronRight className="size-4 rotate-180" />
-                    </button>
-                    <span className="text-sm font-medium text-foreground">
-                      History
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <button
-                      onClick={() => {
-                        setIsMultiSelectMode((prev) => !prev);
-                        setSelectedThreadIds(new Set());
-                      }}
-                      className={`transition-colors hover:text-foreground text-xs px-2 py-0.5 rounded-sm border ${
-                        isMultiSelectMode
-                          ? "bg-secondary text-foreground border-border/50"
-                          : "border-transparent"
-                      }`}
-                      title="Select Multiple"
-                    >
-                      Select
-                    </button>
-                    <button
-                      onClick={() => {
-                        onSelectThread(null);
-                        setIsHistoryPanelOpen(false);
-                      }}
-                      className="transition-colors hover:text-foreground"
-                      title="New Chat"
-                    >
-                      <Plus className="size-4" />
-                    </button>
-                    <button
-                      onClick={() => setIsHistoryPanelOpen(false)}
-                      className="transition-colors hover:text-foreground"
-                      title="Close"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="border-b border-border/20 bg-background/50 px-0">
-                  <div className="relative flex h-8 items-center">
-                    <Search className="absolute left-3 size-3.5 text-muted-foreground/60" />
-                    <input
-                      type="text"
-                      autoFocus
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search threads..."
-                      className="h-full w-full bg-transparent pl-8 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto scrollbar-none pb-4 bg-background">
-                  {filteredThreads.length > 0 ? (
-                    <div className="flex flex-col">
-                      {filteredThreads.map((thread) => {
-                        const isActive = thread.id === activeThreadId;
-                        const isSelected = selectedThreadIds.has(thread.id);
-
-                        return (
-                          <div
-                            key={thread.id}
-                            className={[
-                              "group/history-item flex h-8 w-full cursor-pointer items-center justify-between px-3 text-left transition-colors duration-150 border-b border-border/10 last:border-0",
-                              isActive && !isMultiSelectMode
-                                ? "bg-secondary/60 text-foreground"
-                                : "bg-transparent text-foreground/90 hover:bg-secondary/40",
-                              isSelected ? "bg-primary/10" : "",
-                            ].join(" ")}
-                            onClick={() => {
-                              if (isMultiSelectMode) {
-                                const newSelected = new Set(selectedThreadIds);
-                                if (newSelected.has(thread.id)) {
-                                  newSelected.delete(thread.id);
-                                } else {
-                                  newSelected.add(thread.id);
-                                }
-                                setSelectedThreadIds(newSelected);
-                              } else {
-                                onSelectThread(thread.id);
-                                setIsHistoryPanelOpen(false);
-                              }
-                            }}
-                          >
-                            <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
-                              {isMultiSelectMode && (
-                                <div
-                                  className={`size-3.5 rounded border ${
-                                    isSelected
-                                      ? "bg-primary border-primary"
-                                      : "border-border"
-                                  }`}
-                                />
-                              )}
-                              <div className="flex flex-1 justify-between min-w-0">
-                                <span className="truncate text-sm font-medium text-foreground/90">
-                                  {thread.title || "Untitled Chat"}
-                                </span>
-                                <span className="text-xs text-muted-foreground/60 shrink-0">
-                                  {new Date(
-                                    thread.updatedAt,
-                                  ).toLocaleTimeString([], {
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
-                              </div>
-                            </div>
-
-                            {!isMultiSelectMode && (
-                              <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/history-item:opacity-100">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onDeleteThread) {
-                                      onDeleteThread(thread.id);
-                                    }
-                                  }}
-                                  className="inline-flex items-center justify-center text-muted-foreground/60 transition-colors hover:text-destructive pl-1"
-                                  title="Delete chat"
-                                >
-                                  <Trash2 className="size-4" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center gap-2 px-2 py-8 text-center">
-                      <span className="text-sm text-muted-foreground/60">
-                        {searchQuery ? "No results found" : "No previous chats"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {isMultiSelectMode && selectedThreadIds.size > 0 && (
-                  <div className="border-t border-border/20 p-2 bg-background/95">
-                    <button
-                      onClick={() => {
-                        if (
-                          onDeleteThread &&
-                          window.confirm(
-                            `Are you sure you want to delete ${selectedThreadIds.size} thread(s)?`,
-                          )
-                        ) {
-                          for (const id of selectedThreadIds) {
-                            onDeleteThread(id);
-                          }
-                          setSelectedThreadIds(new Set());
-                          setIsMultiSelectMode(false);
-                        }
-                      }}
-                      className="w-full flex items-center justify-center gap-2 rounded bg-destructive text-destructive-foreground px-3 py-1.5 text-xs font-bold transition-all hover:bg-destructive/90"
-                    >
-                      <Trash2 className="size-3.5" />
-                      Delete {selectedThreadIds.size} Selected
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex flex-col space-y-6 px-4 py-6">
+            {/* Key on activeThreadId so React tears down the old message tree
+                (and all its useSyncExternalStore subscribers) before the runtime
+                switches to the new empty store. Without this, MessagePrimitive.Parts
+                fires one final snapshot check against the new store while still
+                holding stale message indices → tapClientLookup out-of-bounds. */}
+            <div
+              key={activeThreadId ?? "new"}
+              className="flex flex-col space-y-6 px-4 py-6"
+            >
               <ThreadPrimitive.Empty>
                 <div className="flex flex-col items-center justify-center pt-16 text-center px-4">
                   <div className="size-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
