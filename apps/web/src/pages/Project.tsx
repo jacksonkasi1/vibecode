@@ -7,13 +7,10 @@ import { Editor } from "@monaco-editor/react";
 import {
   ArrowLeft,
   Bot,
-  ChevronRight,
   ChevronDown,
   FileCode,
   Folder,
-  Globe,
   Github,
-  PanelLeft,
   Pencil,
   Plus,
   Terminal as TerminalIcon,
@@ -21,7 +18,6 @@ import {
   Square,
   Play,
   RotateCw,
-  Loader2,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -31,7 +27,17 @@ import { useTheme } from "next-themes";
 // ** import components
 import { VibeAssistantThread } from "@/components/assistant/vibe-assistant-thread";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { ExecutionInspector } from "@/components/project/execution-inspector";
+import { ExecutionCenterView } from "@/components/project/execution-workspace";
+import { WorkspaceAppPreview } from "@/components/project/workspace-app-preview";
+import { useExecutionData } from "@/components/project/use-execution-data";
+import { WorkspaceInspector } from "@/components/project/workspace-inspector";
+import { WorkspaceTopbar } from "@/components/project/workspace-topbar";
+import {
+  getAvailableWorkspaceSources,
+  getDefaultWorkspaceSource,
+  type WorkspaceMode,
+  type WorkspaceSource,
+} from "@/components/project/workspace-types";
 
 // ** import hooks
 import { useProjectActions } from "@/pages/project/hooks/use-project-actions";
@@ -65,6 +71,9 @@ export default function Project() {
   });
 
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(
+    null,
+  );
   const [hasManuallySelectedThread, setHasManuallySelectedThread] =
     useState(false);
 
@@ -96,37 +105,67 @@ export default function Project() {
   );
 
   const [isAssistantPanelOpen, setIsAssistantPanelOpen] = useState(true);
+  const [isContextualInspectorOpen, setIsContextualInspectorOpen] =
+    useState(true);
   const [assistantPanelWidth, setAssistantPanelWidth] = useState(
     DEFAULT_ASSISTANT_PANEL_WIDTH,
   );
   const [isResizingAssistantPanel, setIsResizingAssistantPanel] =
     useState(false);
+  const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const [localProjectName, setLocalProjectName] = useState("");
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
   const [selectedFile, setSelectedFile] = useState<Artifact | null>(null);
-  const [workspaceTab, setWorkspaceTab] = useState<"app" | "code">("code");
-  const [inspectorTab, setInspectorTab] = useState<
-    "details" | "timeline" | "changes"
-  >("timeline");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("code");
+  const [workspaceSource, setWorkspaceSource] =
+    useState<WorkspaceSource>("execution_draft");
   const [editorWordWrap, setEditorWordWrap] = useState(false);
   const [editorFontSize, setEditorFontSize] = useState(13);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    if (activeExecutions.length === 0) {
+      setSelectedExecutionId(null);
+      return;
+    }
+
+    const hasSelectedExecution = activeExecutions.some(
+      (execution) => execution.id === selectedExecutionId,
+    );
+
+    if (!hasSelectedExecution) {
+      setSelectedExecutionId(
+        activeExecutions[activeExecutions.length - 1]?.id ?? null,
+      );
+    }
+  }, [activeExecutions, selectedExecutionId]);
+
+  const selectedExecution = useMemo(
+    () =>
+      activeExecutions.find(
+        (execution) => execution.id === selectedExecutionId,
+      ) ?? null,
+    [activeExecutions, selectedExecutionId],
+  );
   const latestExecution = useMemo(
-    () => activeExecutions[activeExecutions.length - 1],
+    () => activeExecutions[activeExecutions.length - 1] ?? null,
     [activeExecutions],
   );
   const previousExecution = useMemo<Execution | null>(() => {
-    if (activeExecutions.length < 2) return null;
-    return activeExecutions[activeExecutions.length - 2] ?? null;
-  }, [activeExecutions]);
+    if (!selectedExecution) return null;
+    const selectedIndex = activeExecutions.findIndex(
+      (execution) => execution.id === selectedExecution.id,
+    );
+    if (selectedIndex <= 0) return null;
+    return activeExecutions[selectedIndex - 1] ?? null;
+  }, [activeExecutions, selectedExecution]);
   const { data: artifactsRes } = useQuery({
-    queryKey: ["artifacts", latestExecution?.id],
+    queryKey: ["artifacts", selectedExecution?.id],
     queryFn: () =>
-      latestExecution?.id
-        ? getArtifacts(latestExecution.id)
+      selectedExecution?.id
+        ? getArtifacts(selectedExecution.id)
         : Promise.resolve({ data: [] }),
-    enabled: !!latestExecution?.id,
+    enabled: !!selectedExecution?.id,
   });
   const artifacts = useMemo(
     () =>
@@ -156,12 +195,29 @@ export default function Project() {
 
   useEffect(() => {
     if (
-      latestExecution?.status === "running" ||
-      latestExecution?.status === "queued"
+      selectedExecution?.status === "running" ||
+      selectedExecution?.status === "queued"
     ) {
-      setInspectorTab("timeline");
+      setWorkspaceMode("timeline");
     }
-  }, [latestExecution?.id, latestExecution?.status]);
+
+    // Auto-expand terminal on error
+    if (selectedExecution?.status === "failed") {
+      setIsTerminalExpanded(true);
+    }
+  }, [selectedExecution?.id, selectedExecution?.status]);
+
+  const availableWorkspaceSources = useMemo(
+    () => getAvailableWorkspaceSources(selectedExecution ?? null),
+    [selectedExecution],
+  );
+
+  useEffect(() => {
+    const nextSource = getDefaultWorkspaceSource(selectedExecution ?? null);
+    setWorkspaceSource((current) =>
+      availableWorkspaceSources.includes(current) ? current : nextSource,
+    );
+  }, [availableWorkspaceSources, selectedExecution]);
 
   const detectLanguage = (file: Artifact | null) => {
     if (!file) return "typescript";
@@ -409,6 +465,39 @@ document.addEventListener("click", function (event) {
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
   };
+  const executionData = useExecutionData({
+    execution: selectedExecution,
+    previousExecution,
+    artifacts,
+    previousArtifacts,
+  });
+
+  const onOpenFile = (path: string) => {
+    const match = displayedArtifacts.find(
+      (artifact) => artifact.filePath === path || artifact.name === path,
+    );
+    if (match) {
+      setSelectedFile(match);
+    }
+  };
+
+  const handleWorkspacePrimaryAction = () => {
+    if (workspaceSource === "main") {
+      setWorkspaceMode("app");
+      return;
+    }
+
+    if (
+      workspaceSource === "execution_draft" &&
+      selectedExecution?.mergedCommitHash &&
+      availableWorkspaceSources.includes("main")
+    ) {
+      setWorkspaceSource("main");
+      return;
+    }
+
+    setWorkspaceMode("review");
+  };
 
   if (isLoading)
     return (
@@ -423,16 +512,16 @@ document.addEventListener("click", function (event) {
         <div ref={splitLayoutRef} className="flex flex-1 min-h-0">
           {/* Assistant Sidebar */}
           <aside
-            className={`relative flex flex-col border-r border-border/40 bg-card/40 transition-[width] duration-200 ease-out ${isAssistantPanelOpen ? "overflow-visible" : "overflow-hidden border-transparent"}`}
+            className={`relative flex flex-col border-r border-border/30 bg-card/15 transition-[width] duration-200 ease-out ${isAssistantPanelOpen ? "overflow-visible" : "overflow-hidden border-transparent"}`}
             style={{
               width: isAssistantPanelOpen ? `${assistantPanelWidth}px` : "0px",
             }}
           >
-            <div className="h-9 flex items-center justify-between px-3 border-b border-border/40 min-w-0">
+            <div className="flex h-8 min-w-0 items-center justify-between border-b border-border/30 px-2.5">
               <div className="flex items-center gap-2">
                 <Link
                   to="/apps"
-                  className="p-1.5 hover:bg-secondary/80 rounded-md transition-colors group"
+                  className="group rounded-md p-1.5 transition-colors hover:bg-secondary/50"
                 >
                   <ArrowLeft className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                 </Link>
@@ -450,7 +539,7 @@ document.addEventListener("click", function (event) {
                     className="flex items-center gap-1 group cursor-pointer"
                     onClick={() => setIsEditingProjectName(true)}
                   >
-                    <span className="text-sm font-semibold truncate max-w-36 text-foreground/90">
+                    <span className="max-w-36 truncate text-sm font-medium text-foreground/90">
                       {project?.name}
                     </span>
                     <Pencil className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -463,9 +552,15 @@ document.addEventListener("click", function (event) {
                 executions={activeExecutions}
                 threads={threads}
                 activeThreadId={activeThreadId}
+                selectedExecutionId={selectedExecutionId}
                 onSelectThread={(id) => {
                   setActiveThreadId(id);
                   setHasManuallySelectedThread(true);
+                }}
+                onSelectExecution={setSelectedExecutionId}
+                onShowTimeline={(execId) => {
+                  setSelectedExecutionId(execId);
+                  setWorkspaceMode("timeline");
                 }}
                 onSendPrompt={(prompt, modelId) =>
                   runPrompt(
@@ -516,158 +611,70 @@ document.addEventListener("click", function (event) {
 
           {/* Main Workspace */}
           <main className="flex-1 flex flex-col min-w-0 bg-background">
-            {/* Toolbar */}
-            <header className="h-9 border-b border-border/40 bg-card/40 flex items-center justify-between px-3 z-10 shadow-sm">
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setIsAssistantPanelOpen(!isAssistantPanelOpen)}
-                  className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-all active:scale-95"
-                  title="Toggle Assistant"
-                >
-                  <PanelLeft
-                    className={`size-3.5 transition-colors ${isAssistantPanelOpen ? "text-primary" : "text-muted-foreground"}`}
-                  />
-                </button>
-                <div className="flex items-center bg-secondary/30 rounded-md p-0.5 border border-border/40 mx-1">
-                  <button
-                    type="button"
-                    onClick={() => setWorkspaceTab("app")}
-                    className={[
-                      "px-2.5 py-0.5 text-xs font-semibold rounded-sm border transition-all h-6",
-                      workspaceTab === "app"
-                        ? "bg-background text-foreground border-border/50"
-                        : "border-transparent text-muted-foreground hover:text-foreground",
-                    ].join(" ")}
-                  >
-                    App
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWorkspaceTab("code")}
-                    className={[
-                      "px-2.5 py-0.5 text-xs font-semibold rounded-sm border transition-all h-6",
-                      workspaceTab === "code"
-                        ? "bg-background text-foreground border-border/50"
-                        : "border-transparent text-muted-foreground hover:text-foreground",
-                    ].join(" ")}
-                  >
-                    Code
-                  </button>
-                </div>
-                <button className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-colors">
-                  <Plus className="size-3.5 text-muted-foreground" />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <div className="flex items-center mr-1">
-                  {latestExecution?.status === "running" ||
-                  latestExecution?.status === "queued" ? (
-                    <span className="flex items-center gap-1.5 px-2 h-6 rounded-full bg-vibe-warning/10 text-vibe-warning text-[9px] font-bold uppercase tracking-wider animate-pulse border border-vibe-warning/20">
-                      <Loader2 className="size-3 animate-spin" /> running
-                    </span>
-                  ) : null}
-                </div>
-                <div className="hidden items-center gap-1 rounded-md border border-border/40 bg-secondary/20 p-0.5 lg:flex">
-                  {(
-                    [
-                      ["details", "Details"],
-                      ["timeline", "Timeline"],
-                      ["changes", "Changes"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setInspectorTab(value)}
-                      className={[
-                        "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
-                        inspectorTab === value
-                          ? "bg-background text-foreground"
-                          : "text-muted-foreground hover:text-foreground",
-                      ].join(" ")}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <button className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-colors">
-                  <Github className="size-3.5 text-muted-foreground" />
-                </button>
-                <div className="h-4 w-px bg-border/40 mx-0.5" />
-                <button className="flex items-center gap-1.5 px-3 h-7 bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98] rounded-md text-xs font-bold transition-all shadow-sm border border-primary/50">
-                  <Globe className="size-3.5" /> Deploy
-                </button>
-                <button className="size-7 flex items-center justify-center hover:bg-secondary/50 rounded-md transition-colors">
-                  <MoreHorizontal className="size-3.5 text-muted-foreground" />
-                </button>
-              </div>
-            </header>
+            <WorkspaceTopbar
+              execution={selectedExecution}
+              workspaceMode={workspaceMode}
+              workspaceSource={workspaceSource}
+              sourceOptions={availableWorkspaceSources}
+              isAssistantPanelOpen={isAssistantPanelOpen}
+              isInspectorOpen={isContextualInspectorOpen}
+              onWorkspaceModeChange={setWorkspaceMode}
+              onWorkspaceSourceChange={setWorkspaceSource}
+              onToggleAssistant={() =>
+                setIsAssistantPanelOpen(!isAssistantPanelOpen)
+              }
+              onToggleInspector={() =>
+                setIsContextualInspectorOpen(!isContextualInspectorOpen)
+              }
+              onPrimaryAction={handleWorkspacePrimaryAction}
+            />
 
             {/* Editor Area */}
             <div className="flex-1 flex min-h-0 bg-background">
-              {/* Explorer */}
-              {workspaceTab === "code" ? (
-                <div className="w-56 border-r border-border/40 bg-card/30 flex flex-col">
-                  <div className="h-8 flex items-center justify-between px-4 border-b border-border/40 text-xs uppercase font-bold text-muted-foreground tracking-widest bg-muted/20">
-                    Explorer
-                    <RotateCw
-                      onClick={handleRefresh}
-                      className="size-3 cursor-pointer hover:text-primary transition-all active:rotate-180"
-                    />
-                  </div>
-                  <div className="flex-1 overflow-y-auto py-3 scrollbar-none">
-                    <div className="px-4 py-1.5 text-xs text-muted-foreground flex items-center gap-2 hover:bg-secondary/30 cursor-pointer group">
-                      <ChevronDown className="size-3 group-hover:text-foreground transition-colors" />
-                      <Folder className="size-3.5 text-muted-foreground/80" />
-                      <span className="font-semibold group-hover:text-foreground tracking-tight">
-                        src
-                      </span>
-                    </div>
-                    {displayedArtifacts.length === 0 ? (
-                      <div className="px-8 py-3 text-xs text-muted-foreground/50 italic font-medium">
-                        No files synthesized
-                      </div>
-                    ) : (
-                      displayedArtifacts.map((file) => (
-                        <div
-                          key={file.id}
-                          onClick={() => setSelectedFile(file)}
-                          className={`px-8 py-1.5 text-xs flex items-center gap-2 cursor-pointer transition-all border-r-2 ${selectedFile?.id === file.id ? "text-primary bg-primary/5 border-primary font-semibold shadow-[inset_-4px_0_8px_-4px_rgba(59,130,246,0.3)]" : "text-muted-foreground/80 hover:bg-secondary/20 border-transparent hover:text-foreground"}`}
-                        >
-                          <FileCode
-                            className={`size-3.5 ${selectedFile?.id === file.id ? "text-primary" : "text-muted-foreground/40"}`}
-                          />
-                          <span className="truncate">{file.name}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Central Editor */}
-              <div className="flex-1 flex flex-col min-w-0 bg-background">
-                {workspaceTab === "app" ? (
-                  <div className="flex-1 overflow-hidden border-l border-border/40 bg-card/20">
-                    {previewSource ? (
-                      <iframe
-                        title="App preview"
-                        sandbox="allow-scripts"
-                        srcDoc={previewSource}
-                        className="h-full w-full bg-background"
+              {/* Explorer + Editor (Code Mode) */}
+              {workspaceMode === "code" ? (
+                <>
+                  <div className="flex w-52 shrink-0 flex-col border-r border-border/30 bg-card/15">
+                    <div className="flex h-8 items-center justify-between border-b border-border/30 bg-muted/10 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                      Explorer
+                      <RotateCw
+                        onClick={handleRefresh}
+                        className="size-3 cursor-pointer hover:text-primary transition-all active:rotate-180"
                       />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                        Preview not available yet
+                    </div>
+                    <div className="flex-1 overflow-y-auto py-2 scrollbar-none">
+                      <div className="group flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary/20">
+                        <ChevronDown className="size-3 group-hover:text-foreground transition-colors" />
+                        <Folder className="size-3.5 text-muted-foreground/80" />
+                        <span className="font-semibold group-hover:text-foreground tracking-tight">
+                          src
+                        </span>
                       </div>
-                    )}
+                      {displayedArtifacts.length === 0 ? (
+                        <div className="px-8 py-3 text-xs text-muted-foreground/50 italic font-medium">
+                          No files synthesized
+                        </div>
+                      ) : (
+                        displayedArtifacts.map((file) => (
+                          <div
+                            key={file.id}
+                            onClick={() => setSelectedFile(file)}
+                            className={`flex cursor-pointer items-center gap-2 border-r-2 px-6 py-1.5 text-xs transition-colors ${selectedFile?.id === file.id ? "border-primary bg-primary/6 font-medium text-primary" : "border-transparent text-muted-foreground/80 hover:bg-secondary/15 hover:text-foreground"}`}
+                          >
+                            <FileCode
+                              className={`size-3.5 ${selectedFile?.id === file.id ? "text-primary" : "text-muted-foreground/40"}`}
+                            />
+                            <span className="truncate">{file.name}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <div className="h-8 flex items-center bg-card/30 px-1 border-b border-border/40 gap-0.5">
+
+                  <div className="flex-1 flex flex-col min-w-0 bg-background">
+                    <div className="flex h-8 items-center gap-0.5 border-b border-border/30 bg-card/15 px-1">
                       {selectedFile ? (
-                        <div className="h-full flex items-center gap-2.5 px-4 bg-card border-t-2 border-primary text-xs font-bold text-foreground animate-in slide-in-from-top-1 duration-300">
+                        <div className="flex h-full items-center gap-2.5 border-t-2 border-primary bg-card/60 px-4 text-xs font-medium text-foreground animate-in slide-in-from-top-1 duration-300">
                           <FileCode className="size-3.5 text-primary" />
                           {selectedFile.name}
                         </div>
@@ -749,133 +756,175 @@ document.addEventListener("click", function (event) {
                         }}
                       />
                     </div>
-                  </>
-                )}
-              </div>
+                  </div>
+                </>
+              ) : null}
 
-              <ExecutionInspector
-                execution={latestExecution ?? null}
-                previousExecution={previousExecution}
-                artifacts={artifacts}
-                previousArtifacts={previousArtifacts}
-                activeTab={inspectorTab}
-                editorTheme={editorTheme}
-                onOpenFile={(path) => {
-                  const match = displayedArtifacts.find(
-                    (artifact) =>
-                      artifact.filePath === path || artifact.name === path,
-                  );
-                  if (match) {
-                    setSelectedFile(match);
-                    setWorkspaceTab("code");
+              {/* App Mode */}
+              {workspaceMode === "app" ? (
+                <WorkspaceAppPreview
+                  execution={selectedExecution}
+                  workspaceSource={workspaceSource}
+                  previewSource={previewSource}
+                  hasPreviewArtifact={displayedArtifacts.some((artifact) =>
+                    artifact.name.toLowerCase().endsWith(".html"),
+                  )}
+                  onOpenCode={() => setWorkspaceMode("code")}
+                  onOpenReview={() => setWorkspaceMode("review")}
+                  onRun={() =>
+                    runPrompt({
+                      prompt: "Re-run current logic",
+                      modelId:
+                        selectedExecution?.modelId || "gemini-3-flash-preview",
+                      threadId: activeThreadId || undefined,
+                      editorContext: getVisibleEditorContext(selectedFile),
+                    })
                   }
-                }}
-              />
+                />
+              ) : null}
+
+              {/* Dynamic Center View for Details/Timeline/Review */}
+              {["details", "timeline", "review"].includes(workspaceMode) ? (
+                <ExecutionCenterView
+                  workspaceMode={workspaceMode}
+                  data={executionData}
+                  editorTheme={editorTheme}
+                  onOpenFile={onOpenFile}
+                />
+              ) : null}
+
+              {/* Contextual Inspector */}
+              {isContextualInspectorOpen && (
+                <WorkspaceInspector
+                  workspaceMode={workspaceMode}
+                  workspaceSource={workspaceSource}
+                  execution={selectedExecution}
+                  selectedFile={selectedFile}
+                  executionData={executionData}
+                  onOpenFile={onOpenFile}
+                />
+              )}
             </div>
 
             {/* Terminal Area */}
-            <footer className="h-48 border-t border-border/40 bg-card/20 flex flex-col z-20">
-              <div className="h-8 flex items-center px-4 border-b border-border/40 gap-6 text-xs font-black text-muted-foreground uppercase tracking-widest">
+            <footer
+              className={[
+                "border-t border-border/40 bg-card/20 flex flex-col z-20 transition-all duration-300 ease-in-out",
+                isTerminalExpanded ? "h-64" : "h-10",
+              ].join(" ")}
+            >
+              <div
+                className="h-10 flex items-center px-4 border-b border-border/40 gap-6 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/30 select-none shrink-0"
+                onClick={() => setIsTerminalExpanded((prev) => !prev)}
+              >
                 <div className="flex items-center gap-2 text-primary border-b-2 border-primary h-full px-1">
-                  <TerminalIcon className="size-3" /> Terminal
+                  <TerminalIcon className="size-3.5" /> Terminal
                 </div>
-                <span className="hover:text-foreground cursor-pointer transition-colors flex items-center h-full">
+                <span className="hover:text-foreground transition-colors flex items-center h-full">
                   Output
                 </span>
-                <span className="hover:text-foreground cursor-pointer transition-colors flex items-center h-full">
+                <span className="hover:text-foreground transition-colors flex items-center h-full">
                   Debug
                 </span>
 
                 <div className="ml-auto flex items-center gap-5">
-                  {(latestExecution?.status === "running" ||
-                    latestExecution?.status === "queued") && (
+                  {(selectedExecution?.status === "running" ||
+                    selectedExecution?.status === "queued") && (
                     <button
-                      onClick={() => cancelPrompt(latestExecution.id)}
-                      className="flex items-center gap-1.5 text-destructive hover:text-destructive-foreground hover:bg-destructive/20 px-2 py-0.5 rounded transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cancelPrompt(selectedExecution.id);
+                      }}
+                      className="flex items-center gap-1.5 text-destructive hover:text-destructive-foreground hover:bg-destructive/20 px-2.5 py-1 rounded transition-all"
                     >
-                      <Square className="size-3 fill-current" /> Stop
+                      <Square className="size-3.5 fill-current" /> Stop
                     </button>
                   )}
                   <button
-                    onClick={() =>
+                    onClick={(e) => {
+                      e.stopPropagation();
                       runPrompt({
                         prompt: "Re-run current logic",
                         modelId:
-                          latestExecution?.modelId || "gemini-3-flash-preview",
+                          selectedExecution?.modelId ||
+                          "gemini-3-flash-preview",
                         threadId: activeThreadId || undefined,
                         editorContext: getVisibleEditorContext(selectedFile),
-                      })
-                    }
-                    className="flex items-center gap-1.5 text-vibe-success hover:text-foreground hover:bg-vibe-success/20 px-2 py-0.5 rounded transition-all"
+                      });
+                    }}
+                    className="flex items-center gap-1.5 text-vibe-success hover:text-foreground hover:bg-vibe-success/20 px-2.5 py-1 rounded transition-all"
                   >
-                    <Play className="size-3 fill-current" /> Run
+                    <Play className="size-3.5 fill-current" /> Run
                   </button>
                 </div>
               </div>
-              <div className="flex-1 p-5 font-mono text-xs bg-background overflow-y-auto scrollbar-thin scrollbar-thumb-white/5">
-                <div className="flex gap-2.5 items-center mb-3">
-                  <span className="px-2 py-0.5 rounded-sm bg-vibe-success/10 text-vibe-success text-[10px] font-black tracking-tighter shadow-sm border border-vibe-success/20">
-                    AGENT_ACTIVE
-                  </span>
-                  <span className="text-muted-foreground/40 text-[10px] tracking-wide">
-                    {new Date().toLocaleTimeString()}
-                  </span>
-                </div>
 
-                <div className="space-y-1.5 text-muted-foreground/90">
-                  <div className="flex gap-2 items-center">
-                    <span className="text-vibe-success font-bold opacity-80">
-                      ➜
+              {isTerminalExpanded && (
+                <div className="flex-1 p-5 font-mono text-xs bg-background overflow-y-auto scrollbar-thin scrollbar-thumb-white/5">
+                  <div className="flex gap-2.5 items-center mb-3">
+                    <span className="px-2 py-0.5 rounded-sm bg-vibe-success/10 text-vibe-success text-[10px] font-black tracking-tighter shadow-sm border border-vibe-success/20">
+                      AGENT_ACTIVE
                     </span>
-                    <span className="text-primary font-bold tracking-tight">
-                      vibecode
-                    </span>
-                    <span className="text-muted-foreground/50 font-bold">
-                      on
-                    </span>
-                    <span className="text-muted-foreground font-bold">
-                      session/{projectId.substring(0, 6)}
-                    </span>
-                    <span className="text-foreground italic font-medium ml-1">
-                      vibe start --watch
+                    <span className="text-muted-foreground/40 text-[10px] tracking-wide">
+                      {new Date().toLocaleTimeString()}
                     </span>
                   </div>
 
-                  {latestExecution?.status === "running" ||
-                  latestExecution?.status === "queued" ? (
-                    <div className="mt-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 font-sans text-xs text-foreground/80">
-                      <div className="flex items-center gap-2 font-medium text-foreground/90">
-                        <Bot className="size-3.5 text-primary" />
-                        Timeline is live in the right inspector panel.
-                      </div>
-                      <div className="mt-1 text-muted-foreground">
-                        Open the Timeline tab to inspect thoughts, tool calls,
-                        sub-agents, and changes.
-                      </div>
+                  <div className="space-y-1.5 text-muted-foreground/90">
+                    <div className="flex gap-2 items-center">
+                      <span className="text-vibe-success font-bold opacity-80">
+                        ➜
+                      </span>
+                      <span className="text-primary font-bold tracking-tight">
+                        vibecode
+                      </span>
+                      <span className="text-muted-foreground/50 font-bold">
+                        on
+                      </span>
+                      <span className="text-muted-foreground font-bold">
+                        session/{projectId.substring(0, 6)}
+                      </span>
+                      <span className="text-foreground italic font-medium ml-1">
+                        vibe start --watch
+                      </span>
                     </div>
-                  ) : null}
 
-                  {latestExecution ? (
-                    <div className="mt-3 space-y-2 border-l border-border/30 pl-4 ml-1">
-                      {latestExecution.errorMessage && (
-                        <div className="text-red-400 bg-red-400/5 p-3 rounded-md border border-red-400/20 mt-3 font-sans text-xs">
-                          <span className="font-bold flex items-center gap-2 mb-1">
-                            <Square className="size-3 fill-current" /> Error
-                            Stack:
-                          </span>
-                          {latestExecution.errorMessage}
+                    {selectedExecution?.status === "running" ||
+                    selectedExecution?.status === "queued" ? (
+                      <div className="mt-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 font-sans text-xs text-foreground/80">
+                        <div className="flex items-center gap-2 font-medium text-foreground/90">
+                          <Bot className="size-3.5 text-primary" />
+                          Timeline is live in the right inspector panel.
                         </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="mt-6 text-center py-8">
-                      <div className="inline-block px-4 py-2 rounded-lg border border-border/40 bg-card/40 text-muted-foreground/60 text-xs font-bold tracking-widest uppercase">
-                        No active processes
+                        <div className="mt-1 text-muted-foreground">
+                          Open the Timeline tab to inspect thoughts, tool calls,
+                          sub-agents, and changes.
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ) : null}
+
+                    {selectedExecution ? (
+                      <div className="mt-3 space-y-2 border-l border-border/30 pl-4 ml-1">
+                        {selectedExecution.errorMessage && (
+                          <div className="text-red-400 bg-red-400/5 p-3 rounded-md border border-red-400/20 mt-3 font-sans text-xs">
+                            <span className="font-bold flex items-center gap-2 mb-1">
+                              <Square className="size-3 fill-current" /> Error
+                              Stack:
+                            </span>
+                            {selectedExecution.errorMessage}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-6 text-center py-8">
+                        <div className="inline-block px-4 py-2 rounded-lg border border-border/40 bg-card/40 text-muted-foreground/60 text-xs font-bold tracking-widest uppercase">
+                          No active processes
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </footer>
           </main>
         </div>
