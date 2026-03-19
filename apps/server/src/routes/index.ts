@@ -10,6 +10,7 @@ import executionsRouter from "./executions";
 import modelsRouter from "./models";
 import artifactsRouter from "./artifacts";
 import threadsRouter from "./threads";
+import agentsRouter from "./agents";
 
 const apiRouter = new Hono();
 
@@ -21,5 +22,6 @@ apiRouter.route("/executions", executionsRouter);
 apiRouter.route("/models", modelsRouter);
 apiRouter.route("/artifacts", artifactsRouter);
 apiRouter.route("/threads", threadsRouter);
+apiRouter.route("/agents", agentsRouter);
 
 export default apiRouter;

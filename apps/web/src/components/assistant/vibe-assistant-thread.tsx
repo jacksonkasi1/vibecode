@@ -1,5 +1,5 @@
 // ** import types
-import type { Execution } from "@repo/db";
+import type { AgentTask, Execution } from "@repo/db";
 import type { FC } from "react";
 import type { MessageTiming } from "@assistant-ui/react";
 
@@ -12,6 +12,7 @@ import {
   useRef,
   useMemo,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   AuiIf,
   AssistantRuntimeProvider,
@@ -56,6 +57,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AgentProgress } from "@/components/apps/AgentProgress";
+import { AgentTimeline } from "@/components/apps/AgentTimeline";
+
+// ** import apis
+import { getAgentTasks } from "@/rest-api/executions";
 
 const ThreadActionContext = createContext<{
   onUndoToMessage?: (messageId: string, promptText: string) => void;
@@ -361,6 +367,38 @@ function StreamingIndicator({
         <span aria-hidden>•</span>
         <span>{formatElapsed(elapsedSeconds)}</span>
       </div>
+    </div>
+  );
+}
+
+// ─── Agent Mission Control ────────────────────────────────────────────────────
+
+/**
+ * Polls agent tasks for a multi-agent execution and renders progress + timeline.
+ */
+function AgentMissionControl({
+  executionId,
+  isRunning,
+}: {
+  executionId: string;
+  isRunning: boolean;
+}) {
+  const { data } = useQuery<{ data: AgentTask[] }>({
+    queryKey: ["agent-tasks", executionId],
+    queryFn: () => getAgentTasks(executionId),
+    enabled: !!executionId,
+    refetchInterval: isRunning ? 3000 : false,
+    staleTime: isRunning ? 2000 : Number.POSITIVE_INFINITY,
+  });
+
+  const tasks = data?.data ?? [];
+
+  if (tasks.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-col gap-3 rounded-xl border border-border/30 bg-muted/15 p-3 text-xs">
+      <AgentProgress tasks={tasks} />
+      <AgentTimeline tasks={tasks} />
     </div>
   );
 }
@@ -880,6 +918,22 @@ export function VibeAssistantThread({
                     AssistantMessage,
                   }}
                 />
+                {/* Agent mission control panels — shown for multi-agent executions */}
+                {executions
+                  .filter(
+                    (exec) =>
+                      exec.classification === "multi" &&
+                      (!activeThreadId || exec.threadId === activeThreadId),
+                  )
+                  .map((exec) => (
+                    <AgentMissionControl
+                      key={exec.id}
+                      executionId={exec.id}
+                      isRunning={
+                        exec.status === "running" || exec.status === "queued"
+                      }
+                    />
+                  ))}
                 {isSending && (
                   <StreamingIndicator
                     modelName={
