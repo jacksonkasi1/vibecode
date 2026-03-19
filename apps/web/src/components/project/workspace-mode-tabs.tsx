@@ -14,7 +14,9 @@ export function WorkspaceModeTabs({
 }) {
   return (
     <div className="flex items-center rounded-lg border border-border/40 bg-muted/20 p-[3px]">
-      {WORKSPACE_MODE_OPTIONS.map((option) => (
+      {WORKSPACE_MODE_OPTIONS.filter(
+        (option) => option.value !== "details",
+      ).map((option) => (
         <button
           key={option.value}
           type="button"

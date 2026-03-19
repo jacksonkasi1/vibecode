@@ -618,6 +618,7 @@ document.addEventListener("click", function (event) {
               sourceOptions={availableWorkspaceSources}
               isAssistantPanelOpen={isAssistantPanelOpen}
               isInspectorOpen={isContextualInspectorOpen}
+              isTerminalOpen={isTerminalExpanded}
               onWorkspaceModeChange={setWorkspaceMode}
               onWorkspaceSourceChange={setWorkspaceSource}
               onToggleAssistant={() =>
@@ -626,7 +627,9 @@ document.addEventListener("click", function (event) {
               onToggleInspector={() =>
                 setIsContextualInspectorOpen(!isContextualInspectorOpen)
               }
-              onPrimaryAction={handleWorkspacePrimaryAction}
+              onToggleTerminal={() =>
+                setIsTerminalExpanded((previous) => !previous)
+              }
             />
 
             {/* Editor Area */}
@@ -794,7 +797,7 @@ document.addEventListener("click", function (event) {
               ) : null}
 
               {/* Contextual Inspector */}
-              {isContextualInspectorOpen && (
+              {isContextualInspectorOpen && workspaceMode !== "timeline" && (
                 <WorkspaceInspector
                   workspaceMode={workspaceMode}
                   workspaceSource={workspaceSource}
@@ -806,126 +809,114 @@ document.addEventListener("click", function (event) {
               )}
             </div>
 
-            {/* Terminal Area */}
-            <footer
-              className={[
-                "border-t border-border/40 bg-card/20 flex flex-col z-20 transition-all duration-300 ease-in-out",
-                isTerminalExpanded ? "h-64" : "h-10",
-              ].join(" ")}
-            >
-              <div
-                className="h-10 flex items-center px-4 border-b border-border/40 gap-6 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/30 select-none shrink-0"
-                onClick={() => setIsTerminalExpanded((prev) => !prev)}
-              >
-                <div className="flex items-center gap-2 text-primary border-b-2 border-primary h-full px-1">
-                  <TerminalIcon className="size-3.5" /> Terminal
-                </div>
-                <span className="hover:text-foreground transition-colors flex items-center h-full">
-                  Output
-                </span>
-                <span className="hover:text-foreground transition-colors flex items-center h-full">
-                  Debug
-                </span>
-
-                <div className="ml-auto flex items-center gap-5">
-                  {(selectedExecution?.status === "running" ||
-                    selectedExecution?.status === "queued") && (
+            {isTerminalExpanded ? (
+              <footer className="z-20 flex h-64 flex-col border-t border-border/40 bg-card/20 transition-all duration-300 ease-in-out">
+                <div className="flex h-11 shrink-0 items-center gap-3 border-b border-border/40 px-4">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-foreground/80">
+                    <TerminalIcon className="size-3.5 text-primary" />
+                    Terminal
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {selectedExecution?.status === "failed"
+                      ? "Latest failure details"
+                      : selectedExecution?.status === "running" ||
+                          selectedExecution?.status === "queued"
+                        ? "Execution is running"
+                        : "Session output"}
+                  </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    {(selectedExecution?.status === "running" ||
+                      selectedExecution?.status === "queued") && (
+                      <button
+                        onClick={() => cancelPrompt(selectedExecution.id)}
+                        className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-destructive transition-all hover:bg-destructive/15 hover:text-destructive"
+                      >
+                        <Square className="size-3.5 fill-current" /> Stop
+                      </button>
+                    )}
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        cancelPrompt(selectedExecution.id);
+                      onClick={() => {
+                        runPrompt({
+                          prompt: "Re-run current logic",
+                          modelId:
+                            selectedExecution?.modelId ||
+                            "gemini-3-flash-preview",
+                          threadId: activeThreadId || undefined,
+                          editorContext: getVisibleEditorContext(selectedFile),
+                        });
                       }}
-                      className="flex items-center gap-1.5 text-destructive hover:text-destructive-foreground hover:bg-destructive/20 px-2.5 py-1 rounded transition-all"
+                      className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-vibe-success transition-all hover:bg-vibe-success/15 hover:text-foreground"
                     >
-                      <Square className="size-3.5 fill-current" /> Stop
+                      <Play className="size-3.5 fill-current" /> Run
                     </button>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      runPrompt({
-                        prompt: "Re-run current logic",
-                        modelId:
-                          selectedExecution?.modelId ||
-                          "gemini-3-flash-preview",
-                        threadId: activeThreadId || undefined,
-                        editorContext: getVisibleEditorContext(selectedFile),
-                      });
-                    }}
-                    className="flex items-center gap-1.5 text-vibe-success hover:text-foreground hover:bg-vibe-success/20 px-2.5 py-1 rounded transition-all"
-                  >
-                    <Play className="size-3.5 fill-current" /> Run
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsTerminalExpanded(false)}
+                      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/35 hover:text-foreground"
+                      title="Hide Terminal"
+                    >
+                      <ChevronDown className="size-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {isTerminalExpanded && (
-                <div className="flex-1 p-5 font-mono text-xs bg-background overflow-y-auto scrollbar-thin scrollbar-thumb-white/5">
-                  <div className="flex gap-2.5 items-center mb-3">
-                    <span className="px-2 py-0.5 rounded-sm bg-vibe-success/10 text-vibe-success text-[10px] font-black tracking-tighter shadow-sm border border-vibe-success/20">
-                      AGENT_ACTIVE
+                <div className="flex-1 overflow-y-auto bg-background px-5 py-4 font-mono text-xs scrollbar-thin scrollbar-thumb-white/5">
+                  <div className="mb-4 flex items-center gap-2.5">
+                    <span className="rounded-sm border border-vibe-success/20 bg-vibe-success/10 px-2 py-0.5 text-[10px] font-black tracking-tight text-vibe-success shadow-sm">
+                      SESSION
                     </span>
-                    <span className="text-muted-foreground/40 text-[10px] tracking-wide">
+                    <span className="text-[10px] tracking-wide text-muted-foreground/40">
                       {new Date().toLocaleTimeString()}
                     </span>
                   </div>
 
-                  <div className="space-y-1.5 text-muted-foreground/90">
-                    <div className="flex gap-2 items-center">
-                      <span className="text-vibe-success font-bold opacity-80">
-                        ➜
-                      </span>
-                      <span className="text-primary font-bold tracking-tight">
+                  <div className="space-y-3 text-muted-foreground/90">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-vibe-success/80">➜</span>
+                      <span className="font-bold tracking-tight text-primary">
                         vibecode
                       </span>
-                      <span className="text-muted-foreground/50 font-bold">
-                        on
-                      </span>
-                      <span className="text-muted-foreground font-bold">
+                      <span className="font-bold text-muted-foreground/50">
                         session/{projectId.substring(0, 6)}
                       </span>
-                      <span className="text-foreground italic font-medium ml-1">
+                      <span className="italic text-foreground/90">
                         vibe start --watch
                       </span>
                     </div>
 
                     {selectedExecution?.status === "running" ||
                     selectedExecution?.status === "queued" ? (
-                      <div className="mt-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 font-sans text-xs text-foreground/80">
+                      <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2 font-sans text-xs text-foreground/80">
                         <div className="flex items-center gap-2 font-medium text-foreground/90">
                           <Bot className="size-3.5 text-primary" />
-                          Timeline is live in the right inspector panel.
+                          Timeline remains the primary place for live agent
+                          events.
                         </div>
                         <div className="mt-1 text-muted-foreground">
-                          Open the Timeline tab to inspect thoughts, tool calls,
-                          sub-agents, and changes.
+                          Keep this panel for quick runtime control and surfaced
+                          failures.
                         </div>
                       </div>
                     ) : null}
 
-                    {selectedExecution ? (
-                      <div className="mt-3 space-y-2 border-l border-border/30 pl-4 ml-1">
-                        {selectedExecution.errorMessage && (
-                          <div className="text-red-400 bg-red-400/5 p-3 rounded-md border border-red-400/20 mt-3 font-sans text-xs">
-                            <span className="font-bold flex items-center gap-2 mb-1">
-                              <Square className="size-3 fill-current" /> Error
-                              Stack:
-                            </span>
-                            {selectedExecution.errorMessage}
-                          </div>
-                        )}
+                    {selectedExecution?.errorMessage ? (
+                      <div className="rounded-md border border-red-400/20 bg-red-400/5 p-3 font-sans text-xs text-red-300">
+                        <span className="mb-1 flex items-center gap-2 font-bold">
+                          <Square className="size-3 fill-current" /> Error
+                        </span>
+                        {selectedExecution.errorMessage}
                       </div>
                     ) : (
-                      <div className="mt-6 text-center py-8">
-                        <div className="inline-block px-4 py-2 rounded-lg border border-border/40 bg-card/40 text-muted-foreground/60 text-xs font-bold tracking-widest uppercase">
-                          No active processes
-                        </div>
+                      <div className="rounded-md border border-border/30 bg-card/30 px-3 py-2 font-sans text-xs text-muted-foreground">
+                        {selectedExecution
+                          ? "No surfaced runtime errors for this execution."
+                          : "No active execution selected."}
                       </div>
                     )}
                   </div>
                 </div>
-              )}
-            </footer>
+              </footer>
+            ) : null}
           </main>
         </div>
       </div>

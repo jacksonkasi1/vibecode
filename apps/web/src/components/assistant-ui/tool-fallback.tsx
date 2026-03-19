@@ -3,9 +3,13 @@
 import { memo, useCallback, useRef, useState } from "react";
 import {
   AlertCircleIcon,
+  CheckCircle2Icon,
   CheckIcon,
   ChevronDownIcon,
+  CircleIcon,
+  ClipboardListIcon,
   LoaderIcon,
+  LoaderCircleIcon,
   XCircleIcon,
 } from "lucide-react";
 import {
@@ -19,6 +23,171 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+
+type TodoItem = {
+  content: string;
+  status?: string;
+  priority?: string;
+};
+
+function parseToolPayload(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+
+  if (typeof value === "string") {
+    try {
+      return parseToolPayload(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+
+  return typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function extractTodos(value: unknown): TodoItem[] {
+  const parsed = parseToolPayload(value);
+  if (!parsed) return [];
+
+  const candidates = [
+    parsed.todos,
+    parseToolPayload(parsed.update)?.todos,
+    parseToolPayload(parsed.result)?.todos,
+  ];
+
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) continue;
+
+    const todos = candidate
+      .map((item: unknown): TodoItem | null => {
+        if (!item || typeof item !== "object") return null;
+        const todo = item as Record<string, unknown>;
+        if (typeof todo.content !== "string" || !todo.content.trim())
+          return null;
+
+        return {
+          content: todo.content,
+          status: typeof todo.status === "string" ? todo.status : undefined,
+          priority:
+            typeof todo.priority === "string" ? todo.priority : undefined,
+        };
+      })
+      .filter((item: TodoItem | null): item is TodoItem => item !== null);
+
+    if (todos.length > 0) return todos;
+  }
+
+  return [];
+}
+
+function getTodoMeta(todos: TodoItem[]) {
+  const completed = todos.filter((todo) => todo.status === "completed").length;
+  const running = todos.filter((todo) => todo.status === "in_progress").length;
+  return { completed, running, total: todos.length };
+}
+
+function TodoStatusIcon({ status }: { status?: string }) {
+  if (status === "completed") {
+    return <CheckCircle2Icon className="size-3.5 text-emerald-500" />;
+  }
+
+  if (status === "in_progress") {
+    return <LoaderCircleIcon className="size-3.5 animate-spin text-blue-500" />;
+  }
+
+  if (status === "cancelled") {
+    return <XCircleIcon className="size-3.5 text-muted-foreground" />;
+  }
+
+  return <CircleIcon className="size-3.5 text-muted-foreground/70" />;
+}
+
+function WriteTodosTool({
+  toolName,
+  argsText,
+  result,
+  status,
+}: {
+  toolName: string;
+  argsText?: string;
+  result?: unknown;
+  status?: ToolCallMessagePartStatus;
+}) {
+  const todos =
+    extractTodos(result).length > 0
+      ? extractTodos(result)
+      : extractTodos(argsText);
+
+  if (todos.length === 0) return null;
+
+  const meta = getTodoMeta(todos);
+  const isRunning = status?.type === "running" || meta.running > 0;
+
+  return (
+    <ToolFallbackRoot
+      defaultOpen
+      className="border-border/50 bg-card/70 py-0 shadow-sm backdrop-blur-sm"
+    >
+      <ToolFallbackTrigger
+        toolName={toolName}
+        status={status}
+        className="py-3"
+      />
+      <ToolFallbackContent className="border-t-0">
+        <div className="px-4 pb-3">
+          <div className="mb-3 flex items-center justify-between rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <ClipboardListIcon className="size-4 text-muted-foreground" />
+              <span className="text-sm font-semibold text-foreground">
+                To-do
+              </span>
+              <span className="rounded-full border border-border/50 bg-background/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {meta.total}
+              </span>
+            </div>
+
+            <div className="text-[11px] text-muted-foreground">
+              {meta.completed}/{meta.total} done
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            {todos.map((todo, index) => (
+              <div
+                key={`${todo.content}-${index}`}
+                className="flex items-start gap-3 rounded-xl border border-border/40 bg-background/60 px-3 py-3"
+              >
+                <div className="pt-0.5">
+                  <TodoStatusIcon status={todo.status} />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm leading-6 text-foreground/90">
+                      {todo.content}
+                    </p>
+                    {todo.status ? (
+                      <span className="rounded-full border border-border/40 bg-muted/30 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        {todo.status.replace(/_/g, " ")}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {isRunning ? (
+            <div className="mt-3 text-[11px] text-muted-foreground">
+              Updating task list...
+            </div>
+          ) : null}
+        </div>
+      </ToolFallbackContent>
+    </ToolFallbackRoot>
+  );
+}
 
 const ANIMATION_DURATION = 200;
 
@@ -274,6 +443,19 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
   result,
   status,
 }) => {
+  if (toolName === "write_todos") {
+    const todoTool = (
+      <WriteTodosTool
+        toolName={toolName}
+        argsText={argsText}
+        result={result}
+        status={status}
+      />
+    );
+
+    if (todoTool) return todoTool;
+  }
+
   const isCancelled =
     status?.type === "incomplete" && status.reason === "cancelled";
 

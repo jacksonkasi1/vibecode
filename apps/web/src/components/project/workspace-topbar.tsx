@@ -3,7 +3,7 @@ import type { Execution } from "@repo/db";
 import type { WorkspaceMode, WorkspaceSource } from "./workspace-types";
 
 // ** import core packages
-import { Globe, Loader2, PanelLeft, PanelRight } from "lucide-react";
+import { Globe, Loader2, PanelLeft, PanelRight, Terminal } from "lucide-react";
 
 // ** import components
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import { WorkspaceSourceSelector } from "./workspace-source-selector";
 
 // ** import utils
 import {
-  getWorkspacePrimaryAction,
   getWorkspaceStatusLabel,
   type WorkspaceSource as SourceOption,
 } from "./workspace-types";
@@ -24,11 +23,12 @@ export function WorkspaceTopbar({
   sourceOptions,
   isAssistantPanelOpen,
   isInspectorOpen,
+  isTerminalOpen,
   onWorkspaceModeChange,
   onWorkspaceSourceChange,
   onToggleAssistant,
   onToggleInspector,
-  onPrimaryAction,
+  onToggleTerminal,
 }: {
   execution: Execution | null;
   workspaceMode: WorkspaceMode;
@@ -36,11 +36,12 @@ export function WorkspaceTopbar({
   sourceOptions: SourceOption[];
   isAssistantPanelOpen: boolean;
   isInspectorOpen: boolean;
+  isTerminalOpen: boolean;
   onWorkspaceModeChange: (value: WorkspaceMode) => void;
   onWorkspaceSourceChange: (value: WorkspaceSource) => void;
   onToggleAssistant: () => void;
   onToggleInspector: () => void;
-  onPrimaryAction: () => void;
+  onToggleTerminal: () => void;
 }) {
   const isRunning =
     execution?.status === "running" || execution?.status === "queued";
@@ -84,28 +85,39 @@ export function WorkspaceTopbar({
           </span>
         ) : null}
 
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2.5"
-          onClick={onPrimaryAction}
-        >
-          {getWorkspacePrimaryAction(workspaceSource, execution)}
-        </Button>
         <Button size="sm" variant="secondary" className="h-7 px-2.5">
           <Globe className="size-3.5" /> Deploy
         </Button>
-        <div className="mx-1 h-4 w-px bg-border/30" />
         <button
           type="button"
-          onClick={onToggleInspector}
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/35 hover:text-foreground"
-          title="Toggle Inspector"
+          onClick={onToggleTerminal}
+          aria-label={isTerminalOpen ? "Hide terminal" : "Show terminal"}
+          aria-pressed={isTerminalOpen}
+          className={[
+            "flex size-7 items-center justify-center rounded-md transition-colors",
+            isTerminalOpen
+              ? "bg-primary/12 text-primary"
+              : "text-muted-foreground hover:bg-secondary/35 hover:text-foreground",
+          ].join(" ")}
+          title={isTerminalOpen ? "Hide Terminal" : "Show Terminal"}
         >
-          <PanelRight
-            className={`size-4 ${isInspectorOpen ? "text-primary" : ""}`}
-          />
+          <Terminal className="size-4" />
         </button>
+        {workspaceMode !== "timeline" && workspaceMode !== "details" ? (
+          <>
+            <div className="mx-1 h-4 w-px bg-border/30" />
+            <button
+              type="button"
+              onClick={onToggleInspector}
+              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/35 hover:text-foreground"
+              title="Toggle Inspector"
+            >
+              <PanelRight
+                className={`size-4 ${isInspectorOpen ? "text-primary" : ""}`}
+              />
+            </button>
+          </>
+        ) : null}
       </div>
     </header>
   );
