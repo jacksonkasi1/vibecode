@@ -57,3 +57,4 @@ yarn-error.log*
 
 explore
 opencode.json
+node-compile-cache/
