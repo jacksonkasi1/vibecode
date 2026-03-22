@@ -27,20 +27,12 @@ import { env } from "@/config/env";
 
 // ** import lib
 import { withWorkspaceLock } from "@/lib/workspace-lock";
-import { withRetry, isDoomLoop, classifyError } from "@/lib/retry";
+import { withRetry, isDoomLoop } from "@/lib/retry";
 
 // ** import tools
 import { getWorkspaceTools } from "../tools";
 
 const execAsync = promisify(exec);
-
-function safeJsonStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value ?? {});
-  } catch {
-    return "{}";
-  }
-}
 
 async function appendTaskEvent(
   rootExecutionId: string,
@@ -84,7 +76,6 @@ async function runSubAgent(opts: RunSubAgentOptions): Promise<{
 }> {
   const {
     taskId,
-    rootExecutionId,
     workspaceId,
     agentName,
     prompt,
@@ -187,7 +178,7 @@ Remember: Always use tools to make real code changes. Do not describe changes wi
   const maxSteps = agentDef.maxSteps;
   let step = 0;
   let finalContent = "";
-  let finalUsage: TokenUsage = {
+  const finalUsage: TokenUsage = {
     promptTokens: 0,
     completionTokens: 0,
     totalTokens: 0,

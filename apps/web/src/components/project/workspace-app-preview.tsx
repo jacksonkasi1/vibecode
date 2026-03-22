@@ -10,7 +10,6 @@ import {
   Play,
   Rocket,
   Square,
-  RefreshCcw,
   LayoutTemplate,
   Globe,
 } from "lucide-react";

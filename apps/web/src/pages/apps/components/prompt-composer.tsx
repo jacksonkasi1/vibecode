@@ -6,7 +6,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowUp,
   Compass,
-  Infinity,
+  Infinity as InfinityIcon,
   Paperclip,
   Plus,
   Settings,
@@ -95,7 +95,7 @@ export function PromptComposer({
                       onClick={() => onSelectMode(option)}
                     >
                       {option === "Agent" ? (
-                        <Infinity className="size-3" />
+                        <InfinityIcon className="size-3" />
                       ) : (
                         <Compass className="size-3" />
                       )}

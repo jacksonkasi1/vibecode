@@ -39,6 +39,11 @@ route.get("/:id/stream", async (c) => {
   if (!Number.isFinite(lastSeq) || lastSeq < 0) lastSeq = 0;
 
   return streamSSE(c, async (stream) => {
+    let aborted = false;
+    stream.onAbort(() => {
+      aborted = true;
+    });
+
     // Send initial status
     await stream.writeSSE({
       event: "execution:status",
@@ -53,7 +58,59 @@ route.get("/:id/stream", async (c) => {
     let currentStatus = found.status;
     const terminalStatuses = ["completed", "conflicted", "failed", "cancelled"];
 
-    while (true) {
+    if (terminalStatuses.includes(currentStatus)) {
+      const existingEventRows = await db
+        .select()
+        .from(executionEvent)
+        .where(
+          and(
+            eq(executionEvent.executionId, id),
+            gt(executionEvent.seq, lastSeq),
+          ),
+        )
+        .orderBy(asc(executionEvent.seq));
+
+      for (const row of existingEventRows) {
+        if (row.type === "editor:context") {
+          lastSeq = row.seq;
+          continue;
+        }
+
+        lastSeq = row.seq;
+        await stream.writeSSE({
+          id: String(row.seq),
+          event: "execution:event",
+          data: JSON.stringify({
+            type: "execution:event",
+            data: {
+              executionId: row.executionId,
+              seq: row.seq,
+              eventType: row.type,
+              payload: row.payloadJson,
+            },
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      }
+
+      await stream.writeSSE({
+        event: `execution:${currentStatus}`,
+        data: JSON.stringify({
+          type: `execution:${currentStatus}`,
+          data: {
+            id: found.id,
+            status: found.status,
+            result: found.result ? JSON.parse(found.result) : null,
+            errorMessage: found.errorMessage,
+          },
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      return;
+    }
+
+    while (!aborted) {
       const eventRows = await db
         .select()
         .from(executionEvent)
@@ -92,6 +149,8 @@ route.get("/:id/stream", async (c) => {
         setTimeout(resolve, env.EXECUTION_STREAM_POLL_MS),
       );
 
+      if (aborted) break;
+
       const [updated] = await db
         .select()
         .from(execution)
@@ -100,21 +159,10 @@ route.get("/:id/stream", async (c) => {
 
       if (!updated) break;
 
-      if (updated.status !== currentStatus) {
+      const statusChanged = updated.status !== currentStatus;
+
+      if (statusChanged) {
         currentStatus = updated.status;
-        await stream.writeSSE({
-          event: `execution:${currentStatus}`,
-          data: JSON.stringify({
-            type: `execution:${currentStatus}`,
-            data: {
-              id: updated.id,
-              status: updated.status,
-              result: updated.result ? JSON.parse(updated.result) : null,
-              errorMessage: updated.errorMessage,
-            },
-            timestamp: new Date().toISOString(),
-          }),
-        });
       }
 
       if (terminalStatuses.includes(currentStatus)) {
@@ -152,7 +200,37 @@ route.get("/:id/stream", async (c) => {
           });
         }
 
+        await stream.writeSSE({
+          event: `execution:${currentStatus}`,
+          data: JSON.stringify({
+            type: `execution:${currentStatus}`,
+            data: {
+              id: updated.id,
+              status: updated.status,
+              result: updated.result ? JSON.parse(updated.result) : null,
+              errorMessage: updated.errorMessage,
+            },
+            timestamp: new Date().toISOString(),
+          }),
+        });
+
         break;
+      }
+
+      if (statusChanged) {
+        await stream.writeSSE({
+          event: `execution:${currentStatus}`,
+          data: JSON.stringify({
+            type: `execution:${currentStatus}`,
+            data: {
+              id: updated.id,
+              status: updated.status,
+              result: updated.result ? JSON.parse(updated.result) : null,
+              errorMessage: updated.errorMessage,
+            },
+            timestamp: new Date().toISOString(),
+          }),
+        });
       }
     }
   });
