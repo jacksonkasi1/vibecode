@@ -1,6 +1,6 @@
 <div align="center">
   <h1>🌊 Vibecode</h1>
-  <p><strong>A bounded, specialized AI engineering team. Inspired by OpenClaw 🦞.</strong></p>
+  <p><strong>A specialized AI engineering team. Inspired by OpenClaw 🦞.</strong></p>
 </div>
 
 ---
@@ -17,7 +17,7 @@ Instead of a generic assistant, think of Vibecode as your localized, specialized
 
 ## 🛠️ Core Capabilities
 
-Most AI coding tools fail because they act as memory-less generalists. Vibecode succeeds by acting as a **bounded, specialized team**.
+Most AI coding tools fail because they act as memory-less generalists. Vibecode succeeds by acting as a **specialized engineering team**.
 
 ### 🧬 Deep Agent Orchestration
 Powered by **LangChain** and **LangGraph**, we don't rely on fragile, single-shot LLM calls. Vibecode runs deep orchestration workflows where specialized agents—Frontend, Backend, Infrastructure—break down complex tickets, coordinate execution, and review each other's work.
@@ -25,8 +25,8 @@ Powered by **LangChain** and **LangGraph**, we don't rely on fragile, single-sho
 ### 🧠 Persistent Memory Layer
 Context is everything. Vibecode features a robust memory layer that remembers your architectural decisions, past migrations, and project-specific conventions. You aren't teaching it from scratch every session; the team _learns_ your codebase and evolves alongside it.
 
-### 🎯 Bounded, Specialized Focus
-Generalist AI writes generic code. Vibecode uses _bounded_ agents. By constraining an agent's context to a highly specific domain (e.g., exclusively optimizing React render cycles or writing complex Drizzle SQL), we extract senior-level execution rather than junior-level boilerplate.
+### 🎯 Specialized Focus
+Generalist AI writes generic code. Vibecode uses specialized agents. By constraining an agent's context to a highly specific domain (e.g., exclusively optimizing React render cycles or writing complex Drizzle SQL), we extract senior-level execution rather than junior-level boilerplate.
 
 ### ⚡ Real-Time Execution
 Code is useless if it doesn't run. Vibecode streams its thought processes, writes code, and **executes it in real-time**. It can run scripts, read terminal outputs, and iterate on errors autonomously until the feature actually works.
