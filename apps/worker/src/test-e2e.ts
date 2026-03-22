@@ -4,7 +4,7 @@ import { user, project, workspace, execution } from "@repo/db";
 import { newId } from "@repo/db";
 
 async function runTest() {
-  console.log("Looking for an existing user in the database...");
+  console.warn("Looking for an existing user in the database...");
   const [existingUser] = await db.select().from(user).limit(1);
 
   if (!existingUser) {
@@ -14,9 +14,9 @@ async function runTest() {
     process.exit(1);
   }
 
-  console.log(`✅ Found user: ${existingUser.name} (${existingUser.email})`);
+  console.warn(`✅ Found user: ${existingUser.name} (${existingUser.email})`);
 
-  console.log("Creating default project...");
+  console.warn("Creating default project...");
   const [testProject] = await db
     .insert(project)
     .values({
@@ -27,7 +27,7 @@ async function runTest() {
     })
     .returning();
 
-  console.log("Creating default workspace...");
+  console.warn("Creating default workspace...");
   const [testWorkspace] = await db
     .insert(workspace)
     .values({
@@ -39,7 +39,7 @@ async function runTest() {
     })
     .returning();
 
-  console.log("Creating execution (queued)...");
+  console.warn("Creating execution (queued)...");
   const [testExec] = await db
     .insert(execution)
     .values({
@@ -53,8 +53,8 @@ async function runTest() {
     })
     .returning();
 
-  console.log(`✅ Execution created: ${testExec.id}`);
-  console.log(
+  console.warn(`✅ Execution created: ${testExec.id}`);
+  console.warn(
     "Make sure your worker is running (`bun run dev`)! It should pick this up automatically.",
   );
 

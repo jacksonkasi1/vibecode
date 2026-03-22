@@ -17,15 +17,15 @@ export const WORKSPACE_MODE_OPTIONS: Array<{
 ];
 
 export const WORKSPACE_SOURCE_LABELS: Record<WorkspaceSource, string> = {
-  execution_draft: "This Execution",
-  main: "Main",
-  conflicted_draft: "Conflicted Draft",
+  execution_draft: "This Response",
+  main: "Current Project",
+  conflicted_draft: "Unsaved Changes",
 };
 
 export const WORKSPACE_SOURCE_DESCRIPTIONS: Record<WorkspaceSource, string> = {
-  execution_draft: "Previewing the active execution branch",
-  main: "Previewing the merged source of truth",
-  conflicted_draft: "Previewing the preserved conflicted branch",
+  execution_draft: "Files written by the agent for this response",
+  main: "The current saved state of your project",
+  conflicted_draft: "Agent changes that couldn't be merged automatically",
 };
 
 export function getDefaultWorkspaceSource(

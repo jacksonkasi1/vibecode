@@ -2,6 +2,10 @@
 import type { Execution } from "@repo/db";
 import type { FC } from "react";
 import type { MessageTiming } from "@assistant-ui/react";
+import type {
+  WorkspaceMode,
+  WorkspaceSource,
+} from "@/components/project/workspace-types";
 
 // ** import lib
 import {
@@ -29,7 +33,7 @@ import {
   ChevronDown,
   ChevronRight,
   Compass,
-  Infinity,
+  Infinity as InfinityIcon,
   Loader2,
   Paperclip,
   Sparkles,
@@ -39,6 +43,8 @@ import {
   X,
   Search,
   Activity,
+  GitMerge,
+  ExternalLink,
 } from "lucide-react";
 
 // ** import components
@@ -60,12 +66,35 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 const AssistantThreadContext = createContext<{
   onShowTimeline?: (executionId: string) => void;
+  onSelectExecution?: (executionId: string) => void;
+  onForceMerge?: (executionId: string) => void;
+  onUndoExecution?: (executionId: string) => void;
+  /** Map from execId → Execution for conflict resolution lookups */
+  executionMap?: Map<string, Execution>;
+  isForceMerging?: boolean;
+  isUndoing?: boolean;
+  onSetWorkspaceMode?: (mode: WorkspaceMode) => void;
+  onSetWorkspaceSource?: (source: WorkspaceSource) => void;
 }>({});
 const modeOptions = ["Agent", "Plan"] as const;
 const modeIcons = {
-  Agent: Infinity,
+  Agent: InfinityIcon,
   Plan: Compass,
 } as const;
+
+function sanitizeErrorMessage(raw: string | null | undefined): string {
+  if (!raw) return "Unknown error";
+  // If it looks like JSON or contains markdown artifacts, wrap in a code fence
+  // to prevent it from rendering as markdown prose.
+  const trimmed = raw.trim();
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
+    return "```\n" + trimmed + "\n```";
+  }
+  return trimmed;
+}
 
 function extractPartialJSONText(raw: string) {
   try {
@@ -100,8 +129,6 @@ function parseAssistantResponse(text: string, execId: string) {
 
     const tag = match[1].toLowerCase();
     const content = match[2] ? match[2].trim() : "";
-    const isClosed = !!match[3];
-
     if (tag === "think") {
       parts.push({ type: "reasoning", text: content });
     } else {
@@ -315,7 +342,43 @@ function UserMessage() {
 function AssistantMessage() {
   const message = useMessage();
   const execId = message?.id?.startsWith("a-") ? message.id.slice(2) : null;
-  const { onShowTimeline } = useContext(AssistantThreadContext);
+  const {
+    onShowTimeline,
+    onSelectExecution,
+    onForceMerge,
+    onUndoExecution,
+    executionMap,
+    isForceMerging,
+    isUndoing,
+    onSetWorkspaceMode,
+    onSetWorkspaceSource,
+  } = useContext(AssistantThreadContext);
+
+  const execution = execId ? executionMap?.get(execId) : undefined;
+  const isConflicted = execution?.status === "conflicted";
+  const isActing = isForceMerging || isUndoing;
+
+  const handleForceMerge = () => {
+    if (!execId) return;
+    if (
+      window.confirm(
+        "Keep these changes? This will apply the agent's edits on top of the current project, overwriting any conflicting lines. This cannot be undone.",
+      )
+    ) {
+      onForceMerge?.(execId);
+    }
+  };
+
+  const handleUndo = () => {
+    if (!execId) return;
+    if (
+      window.confirm(
+        "Undo this response? This will discard the agent's changes and restore the project to the state before this prompt.",
+      )
+    ) {
+      onUndoExecution?.(execId);
+    }
+  };
 
   return (
     <MessagePrimitive.Root className="relative w-full py-2 text-sm text-foreground/90 group/msg">
@@ -331,6 +394,70 @@ function AssistantMessage() {
           } as any
         }
       />
+      {isConflicted && execId && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className="mt-3 rounded-lg border border-vibe-warning/30 border-l-2 border-l-vibe-warning bg-vibe-warning/10 p-3"
+        >
+          <p className="mb-1 text-xs font-semibold text-vibe-warning">
+            Merge conflict
+          </p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Two agents edited the same files at the same time. Choose how to
+            resolve:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleForceMerge}
+              disabled={isActing}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-secondary/60 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              title="Apply this execution's changes, overriding conflicting lines"
+            >
+              {isForceMerging ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <GitMerge
+                  className="size-3.5 text-green-500"
+                  aria-hidden="true"
+                />
+              )}
+              Keep these changes
+            </button>
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={isActing}
+              className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 bg-background px-2.5 py-1 text-xs font-medium text-destructive/80 transition-colors hover:bg-destructive/10 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              title="Discard this execution and roll back the workspace"
+            >
+              {isUndoing ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <X className="size-3.5" aria-hidden="true" />
+              )}
+              Undo this response
+            </button>
+            {onSetWorkspaceMode && onSetWorkspaceSource && (
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectExecution?.(execId);
+                  onSetWorkspaceSource?.("conflicted_draft");
+                  onSetWorkspaceMode?.("review");
+                }}
+                disabled={isActing}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                title="Switch to Review mode to inspect the changes"
+              >
+                <ExternalLink className="size-3.5" aria-hidden="true" />
+                Review changes
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {execId && onShowTimeline && (
         <div className="mt-2.5 flex items-center">
           <button
@@ -417,13 +544,19 @@ interface VibeAssistantThreadProps {
   onRenameThread?: (threadId: string, title: string) => void;
   onDeleteThread?: (threadId: string) => void;
   onShowTimeline?: (executionId: string) => void;
+  onForceMerge?: (executionId: string) => void;
+  onUndoExecution?: (executionId: string) => void;
+  isForceMerging?: boolean;
+  isUndoing?: boolean;
+  onSetWorkspaceMode?: (mode: WorkspaceMode) => void;
+  onSetWorkspaceSource?: (source: WorkspaceSource) => void;
 }
 
 export function VibeAssistantThread({
   executions,
   threads,
   activeThreadId,
-  selectedExecutionId,
+  selectedExecutionId: _selectedExecutionId,
   onSelectThread,
   onSelectExecution,
   onSendPrompt,
@@ -433,6 +566,12 @@ export function VibeAssistantThread({
   onRenameThread,
   onDeleteThread,
   onShowTimeline,
+  onForceMerge,
+  onUndoExecution,
+  isForceMerging,
+  isUndoing,
+  onSetWorkspaceMode,
+  onSetWorkspaceSource,
 }: VibeAssistantThreadProps) {
   const modelList = Array.isArray(models) ? models : [];
 
@@ -512,12 +651,9 @@ export function VibeAssistantThread({
   }, [threads, searchQuery]);
 
   const messages = executions.flatMap((exec) => {
-    const {
-      text: assistantText,
-      usage,
-      current,
-      live,
-    } = extractExecutionTextAndUsage(exec.result);
+    const { text: assistantText, usage } = extractExecutionTextAndUsage(
+      exec.result,
+    );
     const timing = buildTiming(exec, usage?.completionTokens);
 
     const base = {
@@ -537,6 +673,7 @@ export function VibeAssistantThread({
         exec.status === "conflicted"
           ? "Execution completed with merge conflict."
           : "Execution failed.";
+      const errorText = sanitizeErrorMessage(exec.errorMessage);
       return [
         base,
         {
@@ -547,8 +684,8 @@ export function VibeAssistantThread({
               type: "text" as const,
               text:
                 existingParts.length > 0
-                  ? `\n\n**${heading}**\n${exec.errorMessage || "Unknown error"}`
-                  : `${heading}\n\n${exec.errorMessage || "Unknown error"}`,
+                  ? `\n\n**${heading}**\n${errorText}`
+                  : `${heading}\n\n${errorText}`,
             },
           ],
           metadata: timing ? { timing } : {},
@@ -586,8 +723,25 @@ export function VibeAssistantThread({
     },
   });
 
+  const executionMap = useMemo(
+    () => new Map(executions.map((exec) => [exec.id, exec])),
+    [executions],
+  );
+
   return (
-    <AssistantThreadContext.Provider value={{ onShowTimeline }}>
+    <AssistantThreadContext.Provider
+      value={{
+        onShowTimeline,
+        onSelectExecution,
+        onForceMerge,
+        onUndoExecution,
+        executionMap,
+        isForceMerging,
+        isUndoing,
+        onSetWorkspaceMode,
+        onSetWorkspaceSource,
+      }}
+    >
       <AssistantRuntimeProvider runtime={runtime}>
         <TooltipProvider>
           <ThreadPrimitive.Root className="relative flex h-full min-h-0 flex-col bg-background">
@@ -984,7 +1138,7 @@ export function VibeAssistantThread({
                             onClick={() => setSelectedMode(option)}
                           >
                             {option === "Agent" ? (
-                              <Infinity className="size-3" />
+                              <InfinityIcon className="size-3" />
                             ) : (
                               <Compass className="size-3" />
                             )}

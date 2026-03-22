@@ -14,7 +14,6 @@ import { createDeepAgent, LocalShellBackend } from "deepagents";
 
 // ** import types
 import type { AgentDefinition, TokenUsage } from "@repo/ai";
-import type { StructuredTool } from "langchain";
 import type { SubAgent } from "deepagents";
 
 // ** import config
@@ -496,7 +495,7 @@ export async function runDeepAgentsExecution(
     ];
   })();
 
-  let finalMessages: unknown[] = [];
+  const finalMessages: unknown[] = [];
 
   try {
     const stream = await agent.stream(

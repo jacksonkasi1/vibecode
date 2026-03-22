@@ -106,8 +106,7 @@ export async function startPoller() {
   logger.info("Initializing execution poller...");
 
   // Start the polling loop
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (;;) {
     try {
       await pollForExecution();
     } catch (error) {

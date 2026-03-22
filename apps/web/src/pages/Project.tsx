@@ -10,11 +10,8 @@ import {
   ChevronDown,
   FileCode,
   Folder,
-  Github,
   Pencil,
-  Plus,
   Terminal as TerminalIcon,
-  MoreHorizontal,
   Square,
   Play,
   RotateCw,
@@ -65,6 +62,12 @@ export default function Project() {
     cancelPrompt,
     renameThread,
     deleteThread,
+    forceMerge,
+    isForceMerging,
+    undoToPrompt,
+    isUndoing,
+    executionWorkspacePaths,
+    reopenStreamsForExecutions,
   } = useProjectActions({
     projectId,
     workspaceId: workspace?.id,
@@ -88,6 +91,13 @@ export default function Project() {
     if (!activeThreadId) return [];
     return executions.filter((exec) => exec.threadId === activeThreadId);
   }, [executions, activeThreadId]);
+
+  // Reopen SSE streams for any in-flight executions that survived a page reload
+  useEffect(() => {
+    if (executions.length > 0) {
+      reopenStreamsForExecutions(executions);
+    }
+  }, [executions, reopenStreamsForExecutions]);
 
   const { data: modelsRes } = useQuery({
     queryKey: ["models"],
@@ -151,6 +161,21 @@ export default function Project() {
     () => activeExecutions[activeExecutions.length - 1] ?? null,
     [activeExecutions],
   );
+
+  // Derive the filesystem path to open in VSCode:
+  // - During a running execution: use the live worktreeDir from the SSE workspace:path event
+  // - After completion/conflict (or no running execution): use the workspacePath from that event
+  const liveDir = useMemo(() => {
+    if (!selectedExecution) return undefined;
+    const paths = executionWorkspacePaths.get(selectedExecution.id);
+    if (!paths) return undefined;
+    const isRunning =
+      selectedExecution.status === "running" ||
+      selectedExecution.status === "queued";
+    return isRunning
+      ? (paths.worktreeDir ?? paths.workspacePath)
+      : paths.workspacePath;
+  }, [selectedExecution, executionWorkspacePaths]);
   const previousExecution = useMemo<Execution | null>(() => {
     if (!selectedExecution) return null;
     const selectedIndex = activeExecutions.findIndex(
@@ -187,10 +212,39 @@ export default function Project() {
       ),
     [previousArtifactsRes?.data],
   );
-  const displayedArtifacts = useMemo(
-    () => (artifacts.length > 0 ? artifacts : previousArtifacts),
-    [artifacts, previousArtifacts],
+
+  // The latest execution that was successfully merged (for the "main" source view)
+  const latestMergedExecution = useMemo(
+    () =>
+      [...activeExecutions]
+        .reverse()
+        .find((exec) => exec.status === "completed" && exec.mergedCommitHash) ??
+      null,
+    [activeExecutions],
   );
+  const { data: mainArtifactsRes } = useQuery({
+    queryKey: ["artifacts", latestMergedExecution?.id, "main"],
+    queryFn: () =>
+      latestMergedExecution?.id
+        ? getArtifacts(latestMergedExecution.id)
+        : Promise.resolve({ data: [] }),
+    enabled: !!latestMergedExecution?.id,
+  });
+  const mainArtifacts = useMemo(
+    () =>
+      (mainArtifactsRes?.data || []).filter(
+        (artifact) => artifact.type === "file",
+      ),
+    [mainArtifactsRes?.data],
+  );
+
+  const displayedArtifacts = useMemo(() => {
+    if (workspaceSource === "main") {
+      return mainArtifacts.length > 0 ? mainArtifacts : previousArtifacts;
+    }
+    // execution_draft and conflicted_draft both use the selected execution's artifacts
+    return artifacts.length > 0 ? artifacts : previousArtifacts;
+  }, [workspaceSource, artifacts, previousArtifacts, mainArtifacts]);
   const editorTheme = resolvedTheme === "light" ? "vs" : "vs-dark";
 
   useEffect(() => {
@@ -204,6 +258,11 @@ export default function Project() {
     // Auto-expand terminal on error
     if (selectedExecution?.status === "failed") {
       setIsTerminalExpanded(true);
+    }
+
+    // Auto-open assistant panel on conflict so user sees the resolution actions
+    if (selectedExecution?.status === "conflicted") {
+      setIsAssistantPanelOpen(true);
     }
   }, [selectedExecution?.id, selectedExecution?.status]);
 
@@ -342,7 +401,7 @@ export default function Project() {
             );
             if (!js) return full;
             const attrs = `${before}${after}`.trim();
-            return `<script data-preview-inline="${src}"${attrs ? ` ${attrs}` : ""}>${js}<\/script>`;
+            return `<script data-preview-inline="${src}"${attrs ? ` ${attrs}` : ""}>${js}</script>`;
           },
         );
 
@@ -404,11 +463,19 @@ document.addEventListener("click", function (event) {
       return;
     }
 
-    if (
-      selectedFile &&
-      displayedArtifacts.some((artifact) => artifact.id === selectedFile.id)
-    ) {
-      return;
+    if (selectedFile) {
+      const matchingArtifact = displayedArtifacts.find((artifact) => {
+        const selectedPath = selectedFile.filePath || selectedFile.name;
+        const artifactPath = artifact.filePath || artifact.name;
+        return artifact.id === selectedFile.id || artifactPath === selectedPath;
+      });
+
+      if (matchingArtifact) {
+        if (matchingArtifact.id !== selectedFile.id) {
+          setSelectedFile(matchingArtifact);
+        }
+        return;
+      }
     }
 
     const mainFile =
@@ -479,24 +546,6 @@ document.addEventListener("click", function (event) {
     if (match) {
       setSelectedFile(match);
     }
-  };
-
-  const handleWorkspacePrimaryAction = () => {
-    if (workspaceSource === "main") {
-      setWorkspaceMode("app");
-      return;
-    }
-
-    if (
-      workspaceSource === "execution_draft" &&
-      selectedExecution?.mergedCommitHash &&
-      availableWorkspaceSources.includes("main")
-    ) {
-      setWorkspaceSource("main");
-      return;
-    }
-
-    setWorkspaceMode("review");
   };
 
   if (isLoading)
@@ -588,6 +637,12 @@ document.addEventListener("click", function (event) {
                   renameThread({ threadId, title })
                 }
                 onDeleteThread={(threadId) => deleteThread(threadId)}
+                onForceMerge={(executionId) => forceMerge(executionId)}
+                onUndoExecution={(executionId) => undoToPrompt(executionId)}
+                isForceMerging={isForceMerging}
+                isUndoing={isUndoing}
+                onSetWorkspaceMode={setWorkspaceMode}
+                onSetWorkspaceSource={setWorkspaceSource}
               />
             </div>
           </aside>
@@ -619,6 +674,7 @@ document.addEventListener("click", function (event) {
               isAssistantPanelOpen={isAssistantPanelOpen}
               isInspectorOpen={isContextualInspectorOpen}
               isTerminalOpen={isTerminalExpanded}
+              liveDir={liveDir}
               onWorkspaceModeChange={setWorkspaceMode}
               onWorkspaceSourceChange={setWorkspaceSource}
               onToggleAssistant={() =>
@@ -654,9 +710,26 @@ document.addEventListener("click", function (event) {
                         </span>
                       </div>
                       {displayedArtifacts.length === 0 ? (
-                        <div className="px-8 py-3 text-xs text-muted-foreground/50 italic font-medium">
-                          No files synthesized
-                        </div>
+                        isAnyExecutionRunning ? (
+                          <div className="flex flex-col gap-1.5 px-6 py-2">
+                            {[60, 80, 50, 70].map((w, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <div className="size-3 rounded-sm bg-muted/40 animate-pulse" />
+                                <div
+                                  className="h-3 rounded bg-muted/40 animate-pulse"
+                                  style={{ width: `${w}%` }}
+                                />
+                              </div>
+                            ))}
+                            <p className="mt-1 text-[10px] text-muted-foreground/50 italic">
+                              Agent is writing files...
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="px-8 py-3 text-xs text-muted-foreground/50 italic font-medium">
+                            No files synthesized
+                          </div>
+                        )
                       ) : (
                         displayedArtifacts.map((file) => (
                           <div
@@ -797,16 +870,17 @@ document.addEventListener("click", function (event) {
               ) : null}
 
               {/* Contextual Inspector */}
-              {isContextualInspectorOpen && workspaceMode !== "timeline" && (
-                <WorkspaceInspector
-                  workspaceMode={workspaceMode}
-                  workspaceSource={workspaceSource}
-                  execution={selectedExecution}
-                  selectedFile={selectedFile}
-                  executionData={executionData}
-                  onOpenFile={onOpenFile}
-                />
-              )}
+              {isContextualInspectorOpen &&
+                ["details", "review"].includes(workspaceMode) && (
+                  <WorkspaceInspector
+                    workspaceMode={workspaceMode}
+                    workspaceSource={workspaceSource}
+                    execution={selectedExecution}
+                    selectedFile={selectedFile}
+                    executionData={executionData}
+                    onOpenFile={onOpenFile}
+                  />
+                )}
             </div>
 
             {isTerminalExpanded ? (

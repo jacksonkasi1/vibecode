@@ -1,5 +1,6 @@
 // ** import core packages
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
 
 // ** import types
@@ -11,6 +12,8 @@ import {
   createExecution,
   cancelExecution,
   undoExecution,
+  forceMergeExecution,
+  getExecutionEvents,
 } from "@/rest-api/executions";
 import { renameThread, deleteThread, restoreThread } from "@/rest-api/threads";
 
@@ -125,13 +128,66 @@ function openExecutionStream(
   queryClient: ReturnType<typeof useQueryClient>,
   workspaceId: string,
   executionId: string,
+  onWorkspacePaths?: (paths: {
+    worktreeDir?: string;
+    workspacePath?: string;
+  }) => void,
+  onClose?: () => void,
+  cursor?: number,
 ) {
   let assistantTextBuffer = "";
-
-  const source = new EventSource(
+  const streamUrl = new URL(
     `${API_BASE_URL}/api/executions/${executionId}/stream`,
-    { withCredentials: true },
   );
+
+  if (Number.isFinite(cursor) && (cursor ?? 0) > 0) {
+    streamUrl.searchParams.set("cursor", String(cursor));
+  }
+
+  const source = new EventSource(streamUrl.toString(), {
+    withCredentials: true,
+  });
+  const closeSource = () => {
+    source.close();
+    onClose?.();
+  };
+  const terminalStatuses = new Set([
+    "completed",
+    "conflicted",
+    "failed",
+    "cancelled",
+  ]);
+
+  source.addEventListener("execution:status", (event) => {
+    try {
+      const parsed = JSON.parse((event as MessageEvent).data) as {
+        data?: { status?: string };
+      };
+      const status = parsed.data?.status;
+      if (!status) return;
+
+      updateExecutionInCache(
+        queryClient,
+        workspaceId,
+        executionId,
+        (execution) => ({
+          ...execution,
+          status: status as Execution["status"],
+        }),
+      );
+
+      if (terminalStatuses.has(status)) {
+        queryClient.invalidateQueries({
+          queryKey: ["executions", workspaceId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["execution-events", executionId],
+        });
+      }
+    } catch {
+      // ignore malformed status payload
+    }
+  });
 
   source.addEventListener("execution:event", (event) => {
     try {
@@ -159,6 +215,19 @@ function openExecutionStream(
           executionId,
           (execution) => ({ ...execution, status: payload.status as any }),
         );
+      }
+
+      if (eventType === "workspace:path" && onWorkspacePaths) {
+        onWorkspacePaths({
+          worktreeDir:
+            typeof payload.worktreeDir === "string"
+              ? payload.worktreeDir
+              : undefined,
+          workspacePath:
+            typeof payload.workspacePath === "string"
+              ? payload.workspacePath
+              : undefined,
+        });
       }
 
       const liveLabel = buildLiveLabel(eventType, payload);
@@ -270,7 +339,7 @@ function openExecutionStream(
       queryKey: ["execution-events", executionId],
     });
 
-    source.close();
+    closeSource();
   });
 
   source.addEventListener("execution:failed", (event) => {
@@ -298,7 +367,7 @@ function openExecutionStream(
       queryKey: ["execution-events", executionId],
     });
 
-    source.close();
+    closeSource();
   });
 
   source.addEventListener("execution:conflicted", (event) => {
@@ -334,7 +403,43 @@ function openExecutionStream(
       queryKey: ["execution-events", executionId],
     });
 
-    source.close();
+    closeSource();
+  });
+
+  source.addEventListener("execution:cancelled", (event) => {
+    try {
+      const parsed = JSON.parse((event as MessageEvent).data) as {
+        data?: {
+          status?: string;
+          result?: unknown;
+          errorMessage?: string | null;
+        };
+      };
+
+      updateExecutionInCache(
+        queryClient,
+        workspaceId,
+        executionId,
+        (execution) => ({
+          ...execution,
+          status: (parsed.data?.status || "cancelled") as any,
+          result:
+            parsed.data?.result !== undefined
+              ? JSON.stringify(parsed.data.result)
+              : execution.result,
+          errorMessage: parsed.data?.errorMessage ?? execution.errorMessage,
+        }),
+      );
+    } catch {
+      // ignore malformed cancelled payload
+    }
+
+    queryClient.invalidateQueries({ queryKey: ["artifacts", executionId] });
+    queryClient.invalidateQueries({
+      queryKey: ["execution-events", executionId],
+    });
+
+    closeSource();
   });
 
   source.onerror = () => {
@@ -367,7 +472,11 @@ function openExecutionStream(
     queryClient.invalidateQueries({
       queryKey: ["execution-events", executionId],
     });
+
+    closeSource();
   };
+
+  return closeSource;
 }
 
 type UseProjectActionsOptions = {
@@ -381,6 +490,85 @@ export function useProjectActions({
 }: UseProjectActionsOptions) {
   const queryClient = useQueryClient();
   const { push: pushUndo } = useUndoStack();
+
+  // Track live workspace paths per execution (populated from workspace:path SSE event)
+  const [executionWorkspacePaths, setExecutionWorkspacePaths] = useState<
+    Map<string, { worktreeDir?: string; workspacePath?: string }>
+  >(new Map());
+
+  // Track which execution streams have already been opened (so we never double-open)
+  const openedStreamsRef = useRef<Set<string>>(new Set());
+  const streamClosersRef = useRef<Map<string, () => void>>(new Map());
+
+  const closeExecutionStream = useCallback((executionId: string) => {
+    const closeStream = streamClosersRef.current.get(executionId);
+    if (closeStream) {
+      closeStream();
+      streamClosersRef.current.delete(executionId);
+    }
+    openedStreamsRef.current.delete(executionId);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      for (const closeStream of streamClosersRef.current.values()) {
+        closeStream();
+      }
+      streamClosersRef.current.clear();
+      openedStreamsRef.current.clear();
+    };
+  }, []);
+
+  /**
+   * Reopen SSE streams for any executions that are currently running/queued
+   * but whose stream was not opened in this page session (e.g. after a reload).
+   */
+  const reopenStreamsForExecutions = useCallback(
+    async (executions: Execution[]) => {
+      if (!workspaceId) return;
+      for (const exec of executions) {
+        if (exec.status !== "running" && exec.status !== "queued") continue;
+        if (openedStreamsRef.current.has(exec.id)) continue;
+        openedStreamsRef.current.add(exec.id);
+
+        const cachedEvents = queryClient.getQueryData<{
+          data?: Array<{ seq?: number }>;
+        }>(["execution-events", exec.id]);
+        const cachedCursor =
+          cachedEvents?.data?.[cachedEvents.data.length - 1]?.seq;
+        const resumeCursor = Number.isFinite(cachedCursor)
+          ? cachedCursor
+          : await queryClient
+              .fetchQuery({
+                queryKey: ["execution-events", exec.id],
+                queryFn: () => getExecutionEvents(exec.id),
+                staleTime: 0,
+              })
+              .then((res) => res.data?.[res.data.length - 1]?.seq)
+              .catch(() => undefined);
+
+        const closeStream = openExecutionStream(
+          queryClient,
+          workspaceId,
+          exec.id,
+          (paths) => {
+            setExecutionWorkspacePaths((prev) => {
+              const next = new Map(prev);
+              next.set(exec.id, paths);
+              return next;
+            });
+          },
+          () => {
+            streamClosersRef.current.delete(exec.id);
+            openedStreamsRef.current.delete(exec.id);
+          },
+          resumeCursor,
+        );
+        streamClosersRef.current.set(exec.id, closeStream);
+      }
+    },
+    [queryClient, workspaceId],
+  );
 
   const renameProjectMutation = useMutation({
     mutationFn: (newName: string) =>
@@ -431,7 +619,25 @@ export function useProjectActions({
       queryClient.invalidateQueries({ queryKey: ["threads", workspaceId] });
 
       if (workspaceId) {
-        openExecutionStream(queryClient, workspaceId, response.data.id);
+        const executionId = response.data.id;
+        openedStreamsRef.current.add(executionId);
+        const closeStream = openExecutionStream(
+          queryClient,
+          workspaceId,
+          executionId,
+          (paths) => {
+            setExecutionWorkspacePaths((prev) => {
+              const next = new Map(prev);
+              next.set(executionId, paths);
+              return next;
+            });
+          },
+          () => {
+            streamClosersRef.current.delete(executionId);
+            openedStreamsRef.current.delete(executionId);
+          },
+        );
+        streamClosersRef.current.set(executionId, closeStream);
       }
 
       queryClient.invalidateQueries({ queryKey: ["executions", workspaceId] });
@@ -445,9 +651,14 @@ export function useProjectActions({
 
   const undoPromptMutation = useMutation({
     mutationFn: (executionId: string) => undoExecution(executionId),
-    onSuccess: () => {
+    onSuccess: (_, executionId) => {
+      closeExecutionStream(executionId);
       queryClient.invalidateQueries({ queryKey: ["executions", workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["artifacts"] });
+      queryClient.invalidateQueries({
+        queryKey: ["execution-events", executionId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["agent-tasks", executionId] });
       toast.success("Successfully reverted codebase to selected prompt");
     },
     onError: (error) => {
@@ -465,6 +676,25 @@ export function useProjectActions({
     onError: (error) => {
       toast.error(
         `Failed to cancel execution: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    },
+  });
+
+  const forceMergeMutation = useMutation({
+    mutationFn: (executionId: string) => forceMergeExecution(executionId),
+    onSuccess: (_, executionId) => {
+      closeExecutionStream(executionId);
+      queryClient.invalidateQueries({ queryKey: ["executions", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["artifacts"] });
+      queryClient.invalidateQueries({
+        queryKey: ["execution-events", executionId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["agent-tasks", executionId] });
+      toast.success("Changes applied successfully");
+    },
+    onError: (error) => {
+      toast.error(
+        `Failed to apply changes: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     },
   });
@@ -524,7 +754,11 @@ export function useProjectActions({
     isUndoing: undoPromptMutation.isPending,
     cancelPrompt: cancelPromptMutation.mutate,
     isCanceling: cancelPromptMutation.isPending,
+    forceMerge: forceMergeMutation.mutate,
+    isForceMerging: forceMergeMutation.isPending,
     renameThread: renameThreadMutation.mutate,
     deleteThread: deleteThreadMutation.mutate,
+    executionWorkspacePaths,
+    reopenStreamsForExecutions,
   };
 }
