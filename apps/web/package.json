@@ -46,6 +46,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "*",
     "@vitejs/plugin-react": "^5.0.4",
     "prettier": "^3.8.0",

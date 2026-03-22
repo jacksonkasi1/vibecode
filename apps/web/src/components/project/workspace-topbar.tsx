@@ -3,7 +3,14 @@ import type { Execution } from "@repo/db";
 import type { WorkspaceMode, WorkspaceSource } from "./workspace-types";
 
 // ** import core packages
-import { Globe, Loader2, PanelLeft, PanelRight, Terminal } from "lucide-react";
+import {
+  Globe,
+  Loader2,
+  PanelLeft,
+  PanelRight,
+  Terminal,
+  ExternalLink,
+} from "lucide-react";
 
 // ** import components
 import { Button } from "@/components/ui/button";
@@ -24,6 +31,7 @@ export function WorkspaceTopbar({
   isAssistantPanelOpen,
   isInspectorOpen,
   isTerminalOpen,
+  liveDir,
   onWorkspaceModeChange,
   onWorkspaceSourceChange,
   onToggleAssistant,
@@ -37,6 +45,8 @@ export function WorkspaceTopbar({
   isAssistantPanelOpen: boolean;
   isInspectorOpen: boolean;
   isTerminalOpen: boolean;
+  /** Filesystem path to open in VSCode. When provided, shows the "Open in VSCode" button. */
+  liveDir?: string;
   onWorkspaceModeChange: (value: WorkspaceMode) => void;
   onWorkspaceSourceChange: (value: WorkspaceSource) => void;
   onToggleAssistant: () => void;
@@ -80,9 +90,29 @@ export function WorkspaceTopbar({
         </span>
 
         {isRunning ? (
-          <span className="mr-1 flex items-center gap-1 rounded-full border border-vibe-warning/20 bg-vibe-warning/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-vibe-warning shadow-sm">
-            <Loader2 className="size-3 animate-spin" /> Running
+          <span
+            role="status"
+            aria-live="polite"
+            className="mr-1 flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-blue-400 shadow-sm"
+          >
+            <Loader2
+              className="size-3 motion-safe:animate-spin"
+              aria-hidden="true"
+            />{" "}
+            Running
           </span>
+        ) : null}
+
+        {liveDir ? (
+          <a
+            href={`vscode://file/${liveDir.split("/").map(encodeURIComponent).join("/")}`}
+            title="Open workspace in VSCode"
+            rel="noopener noreferrer"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 text-[11px] font-medium text-foreground/80 transition-colors hover:border-border hover:bg-secondary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <ExternalLink className="size-3.5" aria-hidden="true" />
+            Open in VSCode
+          </a>
         ) : null}
 
         <Button size="sm" variant="secondary" className="h-7 px-2.5">
@@ -103,7 +133,7 @@ export function WorkspaceTopbar({
         >
           <Terminal className="size-4" />
         </button>
-        {workspaceMode !== "timeline" && workspaceMode !== "details" ? (
+        {["details", "review"].includes(workspaceMode) ? (
           <>
             <div className="mx-1 h-4 w-px bg-border/30" />
             <button

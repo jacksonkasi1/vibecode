@@ -7,15 +7,7 @@ import path from "node:path";
 
 // ** import lib
 import { db } from "@repo/db";
-import {
-  workspace,
-  project,
-  execution,
-  artifact,
-  eq,
-  and,
-  inArray,
-} from "@repo/db";
+import { workspace, project, execution, eq, and, inArray } from "@repo/db";
 import { logger } from "@repo/logs";
 
 // ** import config

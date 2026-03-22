@@ -74,12 +74,11 @@ export function createSearchCodeTool(workspaceDir: string): ExecutableTool {
           .filter(Boolean)
           .join(" ");
 
-        const { stdout, stderr } = await execAsync(command, {
+        const { stdout } = await execAsync(command, {
           cwd: workspaceDir,
           timeout: 30_000,
         }).catch((err: any) => ({
           stdout: err.stdout || "",
-          stderr: err.stderr || "",
         }));
 
         if (!stdout.trim()) {

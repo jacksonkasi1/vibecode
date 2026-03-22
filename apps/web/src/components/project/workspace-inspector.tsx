@@ -5,13 +5,13 @@ import type { ExecutionData } from "./use-execution-data";
 import type { WorkspaceMode, WorkspaceSource } from "./workspace-types";
 
 // ** import core packages
-import { FileCode2, GitBranch, GitCommitHorizontal, Info } from "lucide-react";
+import { GitBranch, GitCommitHorizontal, Info } from "lucide-react";
 
 // ** import components
 import { ExecutionRightView } from "./execution-workspace";
 
 // ** import utils
-import { detectLanguageFromPath, formatDateTime } from "./execution-utils";
+import { formatDateTime } from "./execution-utils";
 import {
   WORKSPACE_SOURCE_DESCRIPTIONS,
   WORKSPACE_SOURCE_LABELS,
@@ -42,7 +42,7 @@ export function WorkspaceInspector({
   workspaceMode,
   workspaceSource,
   execution,
-  selectedFile,
+  selectedFile: _selectedFile,
   executionData,
   onOpenFile,
 }: {
@@ -53,6 +53,70 @@ export function WorkspaceInspector({
   executionData: ExecutionData;
   onOpenFile: (path: string) => void;
 }) {
+  if (workspaceMode === "review") {
+    const { changes, selectedChange, setSelectedChangePath } = executionData;
+
+    return (
+      <aside className="z-10 flex w-[18rem] shrink-0 flex-col border-l border-border/30 bg-card/15">
+        <div className="border-b border-border/25 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
+            Changes
+          </p>
+          <p className="mt-1 text-sm font-medium text-foreground">
+            {changes.length} changed file{changes.length === 1 ? "" : "s"}
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {changes.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border/40 bg-background/70 px-3 py-6 text-center text-xs text-muted-foreground">
+              No file changes available yet.
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {changes.map((change) => (
+                <button
+                  key={change.path}
+                  type="button"
+                  onClick={() => {
+                    setSelectedChangePath(change.path);
+                    onOpenFile(change.path);
+                  }}
+                  className={[
+                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors",
+                    selectedChange?.path === change.path
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "inline-flex h-5 min-w-5 items-center justify-center rounded-md border text-[10px] font-semibold uppercase",
+                      change.status === "added"
+                        ? "border-vibe-success/25 bg-vibe-success/10 text-vibe-success"
+                        : change.status === "deleted"
+                          ? "border-destructive/25 bg-destructive/10 text-destructive"
+                          : "border-vibe-warning/25 bg-vibe-warning/10 text-vibe-warning",
+                    ].join(" ")}
+                  >
+                    {change.status === "added"
+                      ? "A"
+                      : change.status === "deleted"
+                        ? "D"
+                        : "M"}
+                  </span>
+                  <span className="truncate text-xs font-medium">
+                    {change.path}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="z-10 flex w-[19rem] shrink-0 flex-col border-l border-border/30 bg-card/15">
       <div className="border-b border-border/25 px-4 py-3">
@@ -108,44 +172,6 @@ export function WorkspaceInspector({
           </InspectorSection>
         ) : null}
 
-        {workspaceMode === "code" ? (
-          <InspectorSection
-            label="Selected File"
-            icon={<FileCode2 className="size-3.5" />}
-          >
-            {selectedFile ? (
-              <div className="space-y-2 text-xs text-muted-foreground/80">
-                <div className="break-words text-foreground/90">
-                  {selectedFile.filePath || selectedFile.name}
-                </div>
-                <div>
-                  <span className="text-muted-foreground/60">Type:</span>{" "}
-                  {selectedFile.type}
-                </div>
-                <div>
-                  <span className="text-muted-foreground/60">Language:</span>{" "}
-                  {detectLanguageFromPath(
-                    selectedFile.filePath || selectedFile.name,
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground/75">
-                Select a file to inspect.
-              </div>
-            )}
-          </InspectorSection>
-        ) : null}
-
-        {workspaceMode === "app" ? (
-          <InspectorSection label="App Mode">
-            <div className="text-xs leading-5 text-muted-foreground/75">
-              App shows artifact preview states. Use Review for changed files,
-              Timeline for agent flow, and Details for the final run report.
-            </div>
-          </InspectorSection>
-        ) : null}
-
         {workspaceMode !== "app" && workspaceMode !== "code" ? (
           <div className="min-h-0">
             <ExecutionRightView
@@ -154,15 +180,6 @@ export function WorkspaceInspector({
               onOpenFile={onOpenFile}
             />
           </div>
-        ) : null}
-
-        {workspaceMode === "review" && executionData.changes.length > 0 ? (
-          <InspectorSection label="Quick Summary">
-            <div className="text-xs text-muted-foreground/75">
-              {executionData.changes.length} changed file
-              {executionData.changes.length === 1 ? "" : "s"} in this run.
-            </div>
-          </InspectorSection>
         ) : null}
       </div>
     </aside>

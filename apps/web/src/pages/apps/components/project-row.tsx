@@ -65,7 +65,7 @@ export function ProjectRow({
   onQuickContinue,
   quickContinuePending,
   shouldSuppressQuickOpen,
-  onOpenContinueConfig,
+  onOpenContinueConfig: _onOpenContinueConfig,
   disableRename,
   continuePreset,
   onContinuePresetSelect,

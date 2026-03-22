@@ -46,7 +46,6 @@ export function Providers({ children }: ProvidersProps) {
       <QueryClientProvider client={queryClient}>
         <UndoStackProvider>
           <AuthUIProvider
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             authClient={authClient as any}
             baseURL={APP_URLS.frontend}
             navigate={navigate}

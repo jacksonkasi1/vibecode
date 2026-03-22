@@ -4,6 +4,7 @@ import type { WorkspaceMode } from "./workspace-types";
 
 // ** import core packages
 import { DiffEditor } from "@monaco-editor/react";
+import { useEffect, useRef } from "react";
 import {
   ChevronDown,
   FileCode2,
@@ -141,6 +142,19 @@ function getTodoItems(payload: Record<string, unknown> | undefined) {
     .filter((todo): todo is { content: string; status: string } =>
       Boolean(todo),
     );
+}
+
+function getReviewSectionId(path: string) {
+  return `review-${encodeURIComponent(path)}`;
+}
+
+function getReviewDiffHeight(change: ExecutionData["changes"][number]) {
+  const lineCount = Math.max(
+    change.before.split("\n").length,
+    change.after.split("\n").length,
+  );
+
+  return Math.min(Math.max(lineCount * 20, 260), 720);
 }
 
 function TimelineJsonBlock({
@@ -381,11 +395,65 @@ export function ExecutionCenterView({
 }) {
   const {
     execution,
+    changes,
+    selectedChangePath,
     timelineItems,
     selectedTimelineId,
     setSelectedTimelineId,
     selectedChange,
+    setSelectedChangePath,
   } = data;
+
+  const reviewContainerRef = useRef<HTMLDivElement | null>(null);
+  const reviewSectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const skipNextReviewScrollRef = useRef(false);
+
+  useEffect(() => {
+    if (workspaceMode !== "review") return;
+    if (!changes.length) return;
+
+    const root = reviewContainerRef.current;
+    if (!root) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntries = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+
+        const nextPath = visibleEntries[0]?.target.getAttribute("data-path");
+        if (!nextPath || nextPath === selectedChangePath) return;
+
+        skipNextReviewScrollRef.current = true;
+        setSelectedChangePath(nextPath);
+      },
+      {
+        root,
+        rootMargin: "-10% 0px -55% 0px",
+        threshold: [0.15, 0.35, 0.6],
+      },
+    );
+
+    const sections = Object.values(reviewSectionRefs.current);
+    sections.forEach((section) => {
+      if (section) observer.observe(section);
+    });
+
+    return () => observer.disconnect();
+  }, [changes, selectedChangePath, setSelectedChangePath, workspaceMode]);
+
+  useEffect(() => {
+    if (workspaceMode !== "review") return;
+    if (!selectedChangePath) return;
+
+    if (skipNextReviewScrollRef.current) {
+      skipNextReviewScrollRef.current = false;
+      return;
+    }
+
+    const section = reviewSectionRefs.current[selectedChangePath];
+    section?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [selectedChangePath, workspaceMode]);
 
   if (!execution) return null;
 
@@ -577,47 +645,77 @@ export function ExecutionCenterView({
 
   if (workspaceMode === "review") {
     return (
-      <div className="flex min-h-0 flex-1 bg-background">
-        {selectedChange ? (
-          <div className="flex h-full w-full flex-col">
-            <div className="flex items-center gap-3 border-b border-border/30 bg-card/20 px-4 py-2">
-              <FileCode2 className="size-4 text-primary" />
-              <p className="truncate text-sm font-semibold text-foreground">
-                {selectedChange.path}
-              </p>
-              <span className="ml-auto rounded-full border border-border/30 bg-background/70 px-2 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
-                {selectedChange.status}
-              </span>
-            </div>
-            <div className="min-h-0 flex-1 pt-2">
-              <DiffEditor
-                key={selectedChange.path}
-                theme={editorTheme}
-                original={selectedChange.before}
-                modified={selectedChange.after}
-                language={detectLanguageFromPath(selectedChange.path)}
-                beforeMount={(monaco) => {
-                  const uri = monaco.Uri.parse(
-                    `inmemory://diff/${selectedChange.path}`,
-                  );
-                  const existing = monaco.editor.getModel(uri);
-                  if (existing) existing.dispose();
-                }}
-                options={{
-                  readOnly: true,
-                  minimap: { enabled: false },
-                  renderSideBySide: true,
-                  scrollBeyondLastLine: false,
-                  lineNumbersMinChars: 3,
-                  fontSize: 13,
-                  padding: { top: 16 },
-                }}
-              />
-            </div>
+      <div
+        ref={reviewContainerRef}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-background"
+      >
+        {changes.length === 0 ? (
+          <div className="flex h-full w-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+            No changed files yet.
           </div>
         ) : (
-          <div className="flex h-full w-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-            Select a changed file to inspect the diff.
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 md:px-6">
+            {changes.map((change) => {
+              const isActive = selectedChange?.path === change.path;
+
+              return (
+                <section
+                  key={change.path}
+                  id={getReviewSectionId(change.path)}
+                  data-path={change.path}
+                  ref={(node) => {
+                    reviewSectionRefs.current[change.path] = node;
+                  }}
+                  className="overflow-hidden rounded-2xl border border-border/35 bg-card/45 shadow-sm"
+                >
+                  <div
+                    className={[
+                      "sticky top-0 z-10 flex items-center gap-3 border-b border-border/25 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/85",
+                      isActive ? "bg-background/95" : "bg-background/80",
+                    ].join(" ")}
+                  >
+                    <FileCode2 className="size-4 shrink-0 text-primary" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {change.path.split("/").pop()}
+                      </p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {change.path}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-border/30 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      {change.status}
+                    </span>
+                  </div>
+                  <div className="bg-background/50 p-2 md:p-3">
+                    <DiffEditor
+                      key={change.path}
+                      height={getReviewDiffHeight(change)}
+                      theme={editorTheme}
+                      original={change.before}
+                      modified={change.after}
+                      language={detectLanguageFromPath(change.path)}
+                      beforeMount={(monaco) => {
+                        const uri = monaco.Uri.parse(
+                          `inmemory://diff/${change.path}`,
+                        );
+                        const existing = monaco.editor.getModel(uri);
+                        if (existing) existing.dispose();
+                      }}
+                      options={{
+                        readOnly: true,
+                        minimap: { enabled: false },
+                        renderSideBySide: true,
+                        scrollBeyondLastLine: false,
+                        lineNumbersMinChars: 3,
+                        fontSize: 13,
+                        padding: { top: 12 },
+                      }}
+                    />
+                  </div>
+                </section>
+              );
+            })}
           </div>
         )}
       </div>

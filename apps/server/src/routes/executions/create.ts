@@ -5,10 +5,8 @@ import { Hono } from "hono";
 import { db } from "@repo/db";
 import {
   and,
-  asc,
   chatMessage,
   chatThread,
-  desc,
   eq,
   execution,
   executionEvent,

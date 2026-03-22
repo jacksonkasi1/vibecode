@@ -22,46 +22,23 @@ import { newId } from "@repo/db";
 
 // ** import utils
 import { logger } from "@repo/logs";
-import { GeminiProvider } from "@repo/ai";
 
 // ** import types
-import type { ChatMessage, TokenUsage } from "@repo/ai";
-import type { ToolCall } from "@repo/ai";
+import type { ChatMessage } from "@repo/ai";
 
 // ** import config
 import { env } from "@/config/env";
-import { getWorkspaceTools } from "./tools";
 import { withWorkspaceLock } from "./lib/workspace-lock";
-import { withRetry, isDoomLoop, classifyError } from "./lib/retry";
 import { runDeepAgentsExecution } from "./lib/deepagents-runtime";
 
 // ** import agents
-import {
-  getAgentDefinitionFromMerged,
-  loadUserAgents,
-  mergeUserAgents,
-} from "@repo/ai";
-
-// ** import types (agent registry)
-import type { AgentDefinition } from "@repo/ai";
+import { loadUserAgents, mergeUserAgents } from "@repo/ai";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MAX_SYNTHESIZED_FILES = 200;
 const MAX_INLINE_FILE_BYTES = 256 * 1024;
 const MAX_INLINE_TEXT_CHARS = 120_000;
-
-/**
- * Token threshold (as a fraction of context window) that triggers compaction.
- * When accumulated token usage exceeds this fraction, we summarise the history.
- */
-const CONTEXT_COMPACTION_THRESHOLD = 0.8;
-
-/** Context window size for the default model (Gemini 2.0 Flash). */
-const DEFAULT_CONTEXT_WINDOW = 1_048_576;
-
-/** Save a checkpoint to DB every N steps. */
-const CHECKPOINT_INTERVAL = 10;
 
 /** Update execution.updatedAt every N milliseconds (heartbeat). */
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -79,14 +56,6 @@ function extractTextFromContentJson(contentJson: unknown): string {
     .filter(Boolean)
     .join("\n")
     .trim();
-}
-
-function safeJsonStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value ?? {});
-  } catch {
-    return "{}";
-  }
 }
 
 function isLikelyTextBuffer(buffer: Buffer): boolean {
@@ -327,90 +296,6 @@ async function buildThreadMessages(
   return { messages, threadId };
 }
 
-// ─── Task classification ──────────────────────────────────────────────────────
-
-async function classifyTask(
-  prompt: string,
-  ai: GeminiProvider,
-): Promise<"single" | "multi"> {
-  try {
-    const classificationPrompt = `Classify this coding task as either "single" or "multi".
-
-Rules:
-- "single": focused task on one component/file/area, clear scope, can be done by one developer
-- "multi": full-feature spanning multiple systems (frontend + backend), "build X from scratch", requires parallel work, complex architecture
-
-Task: ${prompt}
-
-Respond with ONLY the word "single" or "multi" — nothing else.`;
-
-    const response = await ai.chat({
-      model: "gemini-3-flash-preview",
-      messages: [{ role: "user", content: classificationPrompt }],
-    });
-
-    const answer = response.content.trim().toLowerCase();
-    if (answer.includes("multi")) return "multi";
-    return "single";
-  } catch (err) {
-    logger.warn(`Task classification failed: ${err}. Defaulting to 'single'.`);
-    return "single";
-  }
-}
-
-// ─── Context compaction ───────────────────────────────────────────────────────
-
-async function compactMessages(
-  messages: ChatMessage[],
-  ai: GeminiProvider,
-  modelId: string,
-  executionId: string,
-): Promise<ChatMessage[]> {
-  const systemMsg = messages.find((m) => m.role === "system");
-  const nonSystem = messages.filter((m) => m.role !== "system");
-
-  // Keep last 4 messages as-is for immediate context
-  const toSummarize = nonSystem.slice(0, -4);
-  const toKeep = nonSystem.slice(-4);
-
-  if (toSummarize.length === 0) return messages;
-
-  logger.info(
-    `[Exec ${executionId}] Compacting ${toSummarize.length} messages to free context...`,
-  );
-
-  const historyText = toSummarize
-    .map((m) => `[${m.role.toUpperCase()}]: ${m.content || "(tool call)"}`)
-    .join("\n\n");
-
-  const summaryResponse = await ai.chat({
-    model: modelId,
-    messages: [
-      {
-        role: "user",
-        content: `Summarise the following conversation history concisely. Preserve all important technical details, file paths, decisions made, and work completed. This summary will be inserted as the new start of the conversation.
-
-<conversation_history>
-${historyText}
-</conversation_history>
-
-Provide a dense technical summary.`,
-      },
-    ],
-  });
-
-  const summaryMsg: ChatMessage = {
-    role: "user",
-    content: `[COMPACTED HISTORY SUMMARY]\n${summaryResponse.content}\n[END SUMMARY — continuing from current state]`,
-  };
-
-  await appendExecutionEvent(executionId, "context:compacted", {
-    messagesCompacted: toSummarize.length,
-  });
-
-  return [...(systemMsg ? [systemMsg] : []), summaryMsg, ...toKeep];
-}
-
 // ─── Heartbeat ────────────────────────────────────────────────────────────────
 
 function startHeartbeat(executionId: string): () => void {
@@ -426,322 +311,6 @@ function startHeartbeat(executionId: string): () => void {
   }, HEARTBEAT_INTERVAL_MS);
 
   return () => clearInterval(interval);
-}
-
-// ─── Core agent loop ──────────────────────────────────────────────────────────
-
-interface RunAgentLoopOptions {
-  executionId: string;
-  workspaceId: string;
-  agentName: string;
-  messages: ChatMessage[];
-  ai: GeminiProvider;
-  modelId: string;
-  worktreeDir: string;
-  maxSteps: number;
-  logEvent: (msg: string) => void;
-  /** Merged registry of built-in + user-defined agents */
-  agentRegistry: Record<string, AgentDefinition>;
-}
-
-interface AgentLoopResult {
-  finalContent: string;
-  finalUsage: TokenUsage;
-  steps: number;
-  isCancelled: boolean;
-}
-
-async function runAgentLoop(
-  opts: RunAgentLoopOptions,
-): Promise<AgentLoopResult> {
-  const {
-    executionId,
-    workspaceId,
-    agentName,
-    messages: initialMessages,
-    ai,
-    modelId,
-    worktreeDir,
-    maxSteps,
-    logEvent,
-    agentRegistry,
-  } = opts;
-
-  const agentDef = getAgentDefinitionFromMerged(agentName, agentRegistry);
-  const effectiveModel = agentDef?.model ?? modelId;
-
-  // Build tool set — for orchestrator, pass task tool options
-  const taskToolOptions =
-    agentName === "orchestrator"
-      ? {
-          rootExecutionId: executionId,
-          workspaceId,
-          modelId,
-          worktreeDir,
-          agentRegistry,
-        }
-      : undefined;
-
-  const tools = getWorkspaceTools(worktreeDir, agentName, taskToolOptions);
-  const toolByName = new Map(tools.map((t) => [t.name, t]));
-
-  const messages = [...initialMessages];
-  let step = 0;
-  let finalContent = "";
-  let finalUsage: TokenUsage = {
-    promptTokens: 0,
-    completionTokens: 0,
-    totalTokens: 0,
-  };
-  let isCancelled = false;
-  const recentToolCalls: Array<{
-    name: string;
-    args: Record<string, unknown>;
-  }> = [];
-
-  while (step < maxSteps) {
-    // Check for cancellation
-    const [currentExec] = await db
-      .select({ status: execution.status })
-      .from(execution)
-      .where(eq(execution.id, executionId))
-      .limit(1);
-
-    if (currentExec?.status === "cancelled") {
-      logEvent("Execution was cancelled by user. Halting loop.");
-      await appendExecutionEvent(executionId, "step:finish", {
-        step,
-        finishReason: "cancelled",
-      });
-      isCancelled = true;
-      break;
-    }
-
-    step++;
-    logEvent(`Agent step ${step}...`);
-    await appendExecutionEvent(executionId, "step:start", { step, agentName });
-
-    let stepContent = "";
-    const stepToolCalls: ToolCall[] = [];
-    let stepUsage: TokenUsage | undefined;
-
-    // ── Stream with retry ─────────────────────────────────────────────────────
-    let contextOverflow = false;
-
-    try {
-      await withRetry(
-        async () => {
-          stepContent = "";
-          stepToolCalls.length = 0;
-
-          for await (const chunk of ai.streamChat({
-            model: effectiveModel,
-            messages,
-            tools,
-          })) {
-            if (chunk.content) {
-              stepContent += chunk.content;
-              await appendExecutionEvent(executionId, "assistant:delta", {
-                step,
-                content: chunk.content,
-                agentName,
-                usage: chunk.usage ?? null,
-              });
-            }
-            if (chunk.usage) {
-              stepUsage = chunk.usage;
-            }
-            if (chunk.toolCalls?.length) {
-              for (const call of chunk.toolCalls) {
-                if (!stepToolCalls.some((e) => e.id === call.id)) {
-                  stepToolCalls.push(call);
-                }
-              }
-            }
-          }
-        },
-        {
-          onRetry: (attempt, err, delayMs) => {
-            logEvent(
-              `Retry attempt ${attempt} after ${delayMs}ms — ${err.message}`,
-            );
-            appendExecutionEvent(executionId, "retry:attempt", {
-              step,
-              attempt,
-              delayMs,
-              error: err.message,
-            }).catch(() => {});
-          },
-        },
-      );
-    } catch (err) {
-      const classified = classifyError(err);
-
-      if (classified.isCancelled) {
-        isCancelled = true;
-        break;
-      }
-
-      if (classified.isContextOverflow) {
-        contextOverflow = true;
-        logEvent(
-          "Context overflow detected — compacting conversation history...",
-        );
-      } else {
-        // Fatal or unretryable error — propagate up
-        throw err;
-      }
-    }
-
-    // ── Context compaction ────────────────────────────────────────────────────
-    if (
-      contextOverflow ||
-      (stepUsage &&
-        stepUsage.totalTokens >
-          DEFAULT_CONTEXT_WINDOW * CONTEXT_COMPACTION_THRESHOLD)
-    ) {
-      const compacted = await compactMessages(
-        messages,
-        ai,
-        effectiveModel,
-        executionId,
-      ).catch((e) => {
-        logger.warn(`Compaction failed: ${e}. Continuing without.`);
-        return messages;
-      });
-      messages.splice(0, messages.length, ...compacted);
-
-      if (contextOverflow) {
-        // Retry the step after compaction
-        step--;
-        continue;
-      }
-    }
-
-    if (stepUsage) {
-      finalUsage.promptTokens += stepUsage.promptTokens;
-      finalUsage.completionTokens += stepUsage.completionTokens;
-      finalUsage.totalTokens += stepUsage.totalTokens;
-    }
-
-    // ── Tool calls ────────────────────────────────────────────────────────────
-    if (stepToolCalls.length > 0) {
-      messages.push({
-        role: "assistant",
-        content: stepContent,
-        toolCalls: stepToolCalls,
-      });
-
-      for (const call of stepToolCalls) {
-        recentToolCalls.push({ name: call.name, args: call.arguments });
-
-        // Doom-loop detection
-        if (isDoomLoop(recentToolCalls)) {
-          logEvent(
-            `Doom-loop detected: repeated ${call.name} calls. Injecting warning.`,
-          );
-          await appendExecutionEvent(executionId, "warn:doomloop", {
-            step,
-            toolName: call.name,
-          });
-          messages.push({
-            role: "tool",
-            toolCallId: call.id,
-            content:
-              "WARNING: You have called this tool with the same arguments 3 times in a row. This is a doom-loop. Please take a different approach or conclude your response.",
-          });
-          continue;
-        }
-
-        const argsJson = safeJsonStringify(call.arguments);
-        const toolTag = `<execute_${call.name}>${argsJson}</execute_${call.name}>`;
-
-        await appendExecutionEvent(executionId, "assistant:delta", {
-          step,
-          content: `\n${toolTag}\n`,
-          agentName,
-          usage: null,
-        });
-
-        finalContent += `\n${toolTag}\n`;
-
-        await appendExecutionEvent(executionId, "tool:call", {
-          step,
-          id: call.id,
-          name: call.name,
-          args: call.arguments,
-          agentName,
-        });
-
-        const tool = toolByName.get(call.name);
-        const toolResult = tool
-          ? await tool.execute(call.arguments)
-          : `Tool not found: ${call.name}`;
-
-        await appendExecutionEvent(executionId, "tool:result", {
-          step,
-          id: call.id,
-          name: call.name,
-          result: toolResult,
-          agentName,
-        });
-
-        messages.push({
-          role: "tool",
-          toolCallId: call.id,
-          content: toolResult,
-        });
-      }
-
-      logEvent(
-        `Agent step ${step} executed ${stepToolCalls.length} tool call(s).`,
-      );
-      await appendExecutionEvent(executionId, "step:finish", {
-        step,
-        finishReason: "tool_calls",
-        toolCallCount: stepToolCalls.length,
-        agentName,
-      });
-
-      // ── Checkpoint every N steps ─────────────────────────────────────────
-      if (step % CHECKPOINT_INTERVAL === 0) {
-        await appendExecutionEvent(executionId, "checkpoint", {
-          step,
-          usage: finalUsage,
-          agentName,
-        }).catch(() => {});
-        logEvent(`Checkpoint saved at step ${step}.`);
-      }
-
-      continue;
-    }
-
-    // ── Natural stop ──────────────────────────────────────────────────────────
-    if (stepContent.trim().length > 0) {
-      messages.push({ role: "assistant", content: stepContent });
-      finalContent += stepContent + "\n";
-    }
-
-    logEvent("Agent finished with reason: stop");
-    await appendExecutionEvent(executionId, "step:finish", {
-      step,
-      finishReason: "stop",
-      agentName,
-    });
-
-    break;
-  }
-
-  if (step >= maxSteps) {
-    logEvent(`Reached maximum steps (${maxSteps}). Halting loop.`);
-    await appendExecutionEvent(executionId, "step:max", {
-      step,
-      maxSteps,
-      agentName,
-    });
-  }
-
-  return { finalContent, finalUsage, steps: step, isCancelled };
 }
 
 // ─── Main entrypoint ──────────────────────────────────────────────────────────
@@ -833,6 +402,13 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
       startedAt: new Date().toISOString(),
     });
 
+    // Emit the live filesystem paths so the frontend can direct users to
+    // open the right directory in their editor during execution.
+    await appendExecutionEvent(execRecord.id, "workspace:path", {
+      workspacePath,
+      worktreeDir,
+    });
+
     await db
       .update(execution)
       .set({
@@ -906,44 +482,6 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
     let mergeError = "";
     let mergeStatus: "completed" | "conflicted" | "failed" = "completed";
     let mergedCommitHash = "";
-
-    // ── Granular git checkpoint ───────────────────────────────────────────
-    if (!isCancelled) {
-      try {
-        await execAsync(`git add .`, { cwd: worktreeDir });
-        const { stdout: indexTreeSha } = await execAsync(`git write-tree`, {
-          cwd: worktreeDir,
-        });
-        const { stdout: worktreeTreeSha } = await execAsync(
-          `git stash create`,
-          { cwd: worktreeDir },
-        ).catch(() => execAsync(`git write-tree`, { cwd: worktreeDir }));
-
-        const checkpointPayload = JSON.stringify({
-          executionId: execRecord.id,
-          workspaceId: execRecord.workspaceId,
-          indexTree: indexTreeSha.trim(),
-          worktreeTree: worktreeTreeSha.trim() || indexTreeSha.trim(),
-          capturedAt: new Date().toISOString(),
-        });
-
-        const { stdout: checkpointCommitSha } = await execAsync(
-          `git commit-tree ${indexTreeSha.trim()} -m ${JSON.stringify(checkpointPayload)}`,
-          { cwd: worktreeDir },
-        );
-
-        await execAsync(
-          `git update-ref refs/checkpoints/${execRecord.id} ${checkpointCommitSha.trim()}`,
-          { cwd: workspacePath },
-        ).catch((err) => logger.warn(`Failed to store checkpoint ref: ${err}`));
-
-        logger.info(
-          `Checkpoint created for execution ${execRecord.id}: ${checkpointCommitSha.trim()}`,
-        );
-      } catch (err) {
-        logger.warn(`Failed to create checkpoint for ${execRecord.id}: ${err}`);
-      }
-    }
 
     // ── Commit & merge worktree ───────────────────────────────────────────
     if (!isCancelled) {
