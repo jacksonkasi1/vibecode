@@ -5,7 +5,7 @@
     //   "type": "local",
     //   "command": ["npx", "-y", "@morphllm/morphmcp"],
     //   "environment": {
-    //     "MORPH_API_KEY": "sk-oXTwBufsdGm5fImapjqtLCIJb4HaZaJsUlrxl-mFAtB4PS5h"
+    //     "MORPH_API_KEY": "your-morph-api-key-here"
     //   },
     //   "enabled": true
     // },
@@ -21,7 +21,7 @@
         "-y",
         "@upstash/context7-mcp",
         "--api-key",
-        "ctx7sk-6490e139-6ad8-4d5f-a3aa-ce91924d4234"
+        "your-context7-api-key-here"
       ]
     }
   },
