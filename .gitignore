@@ -58,3 +58,14 @@ yarn-error.log*
 explore
 opencode.json
 node-compile-cache/
+
+# Local planning and notes
+info.txt
+plan/
+new-todo-list.md
+langchain-migration.todo.md
+skills-capabilities-task-list.md
+todo.md
+*.todo.md
+.agents/skills/langchain-architecture/
+.kilo/plans/
