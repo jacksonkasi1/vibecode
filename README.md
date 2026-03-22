@@ -1,87 +1,77 @@
 <div align="center">
   <h1>🌊 Vibecode</h1>
-  <p><strong>A sophisticated AI-powered coding assistant and workspace platform.</strong></p>
+  <p><strong>A bounded, specialized engineering team with intelligence.</strong></p>
 </div>
 
 ---
 
-## 🚀 Overview
+Let’s get straight to it: **Vibecode is not another AI autocomplete or a glorified chat window.**
 
-Vibecode is a next-generation workspace designed for developers who want to collaborate seamlessly with AI. It moves beyond simple chat interfaces to provide a deep, agentic coding experience. Built on a robust, high-performance monorepo architecture, Vibecode handles complex multi-step reasoning, real-time code generation, and advanced file manipulation directly within the browser.
+Built in the spirit of **OpenClaw**, Vibecode represents a fundamentally different approach to software development. It is an architecture driven by three core pillars: **Intelligence, a Persistent Memory Layer, and Deep Agent Orchestration.**
 
-## ✨ Key Features
+Instead of a generic assistant, think of Vibecode as your localized, specialized AI engineering team. It doesn't just guess the next line of code; it understands your architecture, executes tasks in a sandbox, and delivers production-ready artifacts.
 
-- **🧠 Deep Agent Orchestration:** Powered by **LangChain**, **LangGraph**, and **DeepAgents**, our worker instances run autonomous agents capable of exploring codebases, planning architectures, and executing multi-step coding tasks.
-- **⚡ Real-Time Execution Streaming:** Enjoy zero-latency feedback with **SSE (Server-Sent Events)**. Watch code, terminal outputs, and AI thought processes stream live into your workspace.
-- **📦 Artifact Generation:** Instantly generate complete files, UI components, or entire module scaffolds. The AI doesn't just suggest code; it builds tangible, deployable artifacts.
-- **🔀 Advanced Diff & Merge:** Review AI-generated changes with precision. Includes intelligent diffing, **force merge** capabilities, and seamless **undo actions** to ensure you are always in complete control of your codebase.
+---
 
-## 🏗️ Architecture & Tech Stack
+## 🛠️ Core Capabilities
 
-Vibecode is structured as a highly scalable **Turborepo** monorepo, powered by **Bun** for maximum performance.
+Most AI coding tools fail because they act as memory-less generalists. Vibecode succeeds by acting as a **bounded, specialized team**.
 
-### 🌐 Frontend (`apps/web`)
+### 🧬 Deep Agent Orchestration
 
-- **Framework:** React 19 + Vite + React Router DOM
-- **Styling:** Tailwind CSS v4 + Radix UI
-- **State & Data:** Zustand + React Query
-- **Editor & UI:** Monaco Editor + Assistant UI
+Powered by **LangChain** and **LangGraph**, we don't rely on fragile, single-shot LLM calls. Vibecode runs deep orchestration workflows where specialized agents—Frontend, Backend, Infrastructure—break down complex tickets, coordinate execution, and review each other's work.
 
-### ⚙️ API Server (`apps/server`)
+### 🧠 Persistent Memory Layer
 
-- **Runtime:** Bun
-- **Framework:** Hono (Edge-ready, lightning fast)
-- **Validation:** Zod
+Context is everything. Vibecode features a robust memory layer that remembers your architectural decisions, past migrations, and project-specific conventions. You aren't teaching it from scratch every session; the team _learns_ your codebase and evolves alongside it.
 
-### 🤖 AI Worker (`apps/worker`)
+### 🎯 Bounded, Specialized Focus
 
-- **Orchestration:** LangChain, LangGraph, DeepAgents
-- **Models:** Google GenAI / LLM Integrations
-- **Messaging:** Google Cloud Pub/Sub for async job processing
+Generalist AI writes generic code. Vibecode uses _bounded_ agents. By constraining an agent's context to a highly specific domain (e.g., exclusively optimizing React render cycles or writing complex Drizzle SQL), we extract senior-level execution rather than junior-level boilerplate.
 
-### 💾 Data & Infrastructure (`packages/*`)
+### ⚡ Real-Time Execution
 
-- **Database:** Neon (Serverless Postgres) + Drizzle ORM
-- **Auth:** Better Auth
-- **Tooling:** TypeScript 5.9, ESLint, Prettier
+Code is useless if it doesn't run. Vibecode streams its thought processes, writes code, and **executes it in real-time**. It can run scripts, read terminal outputs, and iterate on errors autonomously until the feature actually works.
 
-## 📂 Project Structure
+### 📦 Tangible Artifact Generation
 
-```text
-vibecode/
-├── apps/
-│   ├── web/        # The main React workspace and coding interface
-│   ├── server/     # Hono-based API Gateway and SSE streaming server
-│   └── worker/     # Heavy-lifting AI agents and LangGraph state machines
-└── packages/
-    ├── ai/         # Shared LLM tools, prompts, and agent configurations
-    ├── auth/       # Better Auth configuration and identity flow
-    ├── db/         # Drizzle schema, migrations, and database client
-    └── shared/     # Common types, utilities, and constants
-```
+We don't do copy-paste code snippets. Vibecode generates complete, deployable **artifacts**—fully wired modules, interactive UI components, and backend services that drop seamlessly into your monorepo.
 
-## 🏎️ Quick Start
+---
+
+## 🏗️ The Engineering
+
+Built for extreme performance, Vibecode is a **Turborepo** monorepo running entirely on **Bun** for maximum speed and DX.
+
+- **Workspace (`apps/web`):** React 19, Vite, Tailwind CSS v4, Zustand.
+- **Gateway (`apps/server`):** Hono (Edge-ready API & SSE Streaming).
+- **Orchestration (`apps/worker`):** LangChain, LangGraph, Google Cloud Pub/Sub.
+- **Data & Infra (`packages/*`):** Neon (Serverless Postgres), Drizzle ORM, Better Auth.
+
+## 🚀 Spin Up Your Team
 
 ```bash
-# 1. Clone the repository
+# Clone & Install
 git clone https://github.com/your-org/vibecode.git
 cd vibecode
-
-# 2. Install dependencies using Bun
 bun install
 
-# 3. Set up environment variables
+# Setup Environment
 cp .env.example .env
-
-# 4. Push database schema
 bun run --filter @repo/db db:push
 
-# 5. Start the development environment (Web, Server, and Worker)
+# Boot the System
 bun run dev
 ```
 
 ---
 
+## 📜 License
+
+Vibecode is open-source and released under the **MIT License**, sharing the same licensing model as [OpenClaw](https://docs.openclaw.ai/). Free as a lobster in the ocean!
+
+---
+
 <div align="center">
-  <i>Built for developers who want to code at the speed of thought.</i>
+  <i>Stop prompting. Start orchestrating.</i>
 </div>
