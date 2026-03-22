@@ -17,7 +17,9 @@ export interface GetWorkspacesResponse {
 export const getWorkspaces = async (
   projectId?: string,
 ): Promise<GetWorkspacesResponse> => {
-  const url = projectId ? `/api/workspaces?projectId=${projectId}` : "/api/workspaces";
+  const url = projectId
+    ? `/api/workspaces?projectId=${projectId}`
+    : "/api/workspaces";
   const response = await axiosInstance.get<GetWorkspacesResponse>(url);
 
   return response.data;

@@ -12,9 +12,19 @@ import type {
   ProviderConfig,
   ModelInfo,
   ToolCall,
+  ToolDefinition,
 } from "../types";
 
 const GEMINI_MODELS: ModelInfo[] = [
+  {
+    id: "gemini-3-flash-preview",
+    displayName: "Gemini 3 Flash Preview",
+    provider: "gemini",
+    contextWindow: 1048576,
+    maxTokens: 65536,
+    capabilities: ["chat", "code", "tools"],
+    isDefault: true,
+  },
   {
     id: "gemini-2.5-pro-preview-05-06",
     displayName: "Gemini 2.5 Pro Preview",
@@ -22,7 +32,6 @@ const GEMINI_MODELS: ModelInfo[] = [
     contextWindow: 1048576,
     maxTokens: 65536,
     capabilities: ["chat", "code", "reasoning", "tools"],
-    isDefault: true,
   },
   {
     id: "gemini-2.5-flash-preview-05-20",
@@ -53,6 +62,20 @@ export class GeminiProvider extends BaseProvider {
     this.client = new GoogleGenAI({ apiKey: config.apiKey });
   }
 
+  private mapTools(tools?: ToolDefinition[]) {
+    if (!tools?.length) return undefined;
+
+    return [
+      {
+        functionDeclarations: tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters as any,
+        })),
+      },
+    ];
+  }
+
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const modelId = this.resolveModel(request);
 
@@ -76,26 +99,22 @@ export class GeminiProvider extends BaseProvider {
         systemInstruction: systemInstruction
           ? { parts: [{ text: systemInstruction }] }
           : undefined,
+        tools: this.mapTools(request.tools),
       },
     });
 
     const text = response.text ?? "";
 
     // Extract tool calls from function calls if present
-    const toolCalls: ToolCall[] = [];
-    const candidates = response.candidates ?? [];
-    for (const candidate of candidates) {
-      for (const part of candidate.content?.parts ?? []) {
-        if (part.functionCall) {
-          toolCalls.push({
-            id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-            name: part.functionCall.name ?? "",
-            arguments:
-              (part.functionCall.args as Record<string, unknown>) ?? {},
-          });
-        }
-      }
-    }
+    const toolCalls: ToolCall[] = (response.functionCalls ?? []).map(
+      (call) => ({
+        id:
+          call.id ||
+          `call_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        name: call.name ?? "",
+        arguments: (call.args as Record<string, unknown>) ?? {},
+      }),
+    );
 
     const hasToolCalls = toolCalls.length > 0;
 
@@ -138,14 +157,26 @@ export class GeminiProvider extends BaseProvider {
         systemInstruction: systemInstruction
           ? { parts: [{ text: systemInstruction }] }
           : undefined,
+        tools: this.mapTools(request.tools),
       },
     });
 
     for await (const chunk of response) {
       const text = chunk.text ?? "";
+      const toolCalls: ToolCall[] | undefined =
+        chunk.functionCalls && chunk.functionCalls.length > 0
+          ? chunk.functionCalls.map((call) => ({
+              id:
+                call.id ||
+                `call_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+              name: call.name ?? "",
+              arguments: (call.args as Record<string, unknown>) ?? {},
+            }))
+          : undefined;
 
       yield {
         content: text || undefined,
+        toolCalls,
         usage: chunk.usageMetadata
           ? {
               promptTokens: chunk.usageMetadata.promptTokenCount ?? 0,

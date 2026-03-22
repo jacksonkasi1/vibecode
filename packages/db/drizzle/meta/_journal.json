@@ -8,6 +8,34 @@
       "when": 1768644903334,
       "tag": "0000_yellow_mach_iv",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773725271440,
+      "tag": "0001_bored_old_lace",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773770730977,
+      "tag": "0002_volatile_mariko_yashida",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773855527167,
+      "tag": "0003_mighty_ser_duncan",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773905324941,
+      "tag": "0004_unknown_earthquake",
+      "breakpoints": true
     }
   ]
 }

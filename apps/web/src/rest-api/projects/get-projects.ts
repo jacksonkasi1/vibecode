@@ -14,7 +14,8 @@ export interface GetProjectsResponse {
  * @returns Promise with array of projects
  */
 export const getProjects = async (): Promise<GetProjectsResponse> => {
-  const response = await axiosInstance.get<GetProjectsResponse>("/api/projects");
+  const response =
+    await axiosInstance.get<GetProjectsResponse>("/api/projects");
 
   return response.data;
 };

@@ -2,7 +2,7 @@
 import type { AppsMode } from "@/pages/apps/types";
 
 // ** import core packages
-import { Compass, Infinity } from "lucide-react";
+import { Compass, Infinity as InfinityIcon } from "lucide-react";
 import { useState } from "react";
 
 // ** import components
@@ -20,7 +20,7 @@ import { useWorkspaceConfig } from "@/pages/apps/hooks/use-workspace-config";
 
 const modeOptions = ["Agent", "Plan"] as const;
 const modeIcons = {
-  Agent: Infinity,
+  Agent: InfinityIcon,
   Plan: Compass,
 } as const;
 

@@ -7,6 +7,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { UndoStackProvider } from "@/lib/undo-stack";
 
 // ** import utils
 import { authClient } from "@/lib/auth-client";
@@ -43,27 +44,28 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <ThemeProvider defaultTheme="light" storageKey="vibe-ui-theme">
       <QueryClientProvider client={queryClient}>
-        <AuthUIProvider
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          authClient={authClient as any}
-          baseURL={APP_URLS.frontend}
-          navigate={navigate}
-          Link={LinkWrapper}
-          social={{
-            providers: ["google"],
-          }}
-          magicLink={true}
-          account={{
-            fields: ["image", "name"],
-          }}
-          avatar={{
-            upload: uploadAvatar,
-            delete: deleteAvatar,
-          }}
-        >
-          {children}
-          <Toaster />
-        </AuthUIProvider>
+        <UndoStackProvider>
+          <AuthUIProvider
+            authClient={authClient as any}
+            baseURL={APP_URLS.frontend}
+            navigate={navigate}
+            Link={LinkWrapper}
+            social={{
+              providers: ["google"],
+            }}
+            magicLink={true}
+            account={{
+              fields: ["image", "name"],
+            }}
+            avatar={{
+              upload: uploadAvatar,
+              delete: deleteAvatar,
+            }}
+          >
+            {children}
+            <Toaster />
+          </AuthUIProvider>
+        </UndoStackProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

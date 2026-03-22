@@ -1,420 +1,997 @@
-// ** import lib
+// ** import types
+import type { KeyboardEvent } from "react";
+import type { Artifact, Execution } from "@repo/db";
+
+// ** import core packages
+import { Editor } from "@monaco-editor/react";
 import {
   ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  ExternalLink,
-  Globe,
-  Github,
-  Monitor,
-  MoreHorizontal,
-  PanelLeft,
+  Bot,
+  ChevronDown,
+  FileCode,
+  Folder,
   Pencil,
-  Plus,
+  Terminal as TerminalIcon,
+  Square,
+  Play,
   RotateCw,
-  UserPlus,
 } from "lucide-react";
-import { useState, useEffect, type KeyboardEvent } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
-// ** import rest-api
-import { getProject, updateProject } from "@/rest-api/projects";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTheme } from "next-themes";
 
 // ** import components
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { VibeAssistantThread } from "@/components/assistant/vibe-assistant-thread";
-import { ModeToggle } from "@/components/ui/mode-toggle";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { ExecutionCenterView } from "@/components/project/execution-workspace";
+import { WorkspaceAppPreview } from "@/components/project/workspace-app-preview";
+import { useExecutionData } from "@/components/project/use-execution-data";
+import { WorkspaceInspector } from "@/components/project/workspace-inspector";
+import { WorkspaceTopbar } from "@/components/project/workspace-topbar";
+import {
+  getAvailableWorkspaceSources,
+  getDefaultWorkspaceSource,
+  type WorkspaceMode,
+  type WorkspaceSource,
+} from "@/components/project/workspace-types";
 
-const files = [
-  ".vibe",
-  "vibe-clone",
-  "  node_modules",
-  "  public",
-  "  src",
-  "    App.tsx",
-  "    index.css",
-  "    main.tsx",
-  "  tailwind.config.js",
-];
+// ** import hooks
+import { useProjectActions } from "@/pages/project/hooks/use-project-actions";
+import { useProjectData } from "@/pages/project/hooks/use-project-data";
 
-const editorCode = [
-  "function Features() {",
-  "  return (",
-  '    <section className="py-24 px-4 bg-secondary/5">',
-  '      <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">',
-  "        {/* cards */}",
-  "      </div>",
-  "    </section>",
-  "  )",
-  "}",
-];
+// ** import apis
+import { getArtifacts } from "@/rest-api/artifacts";
+import { getModels } from "@/rest-api/models";
 
 export default function Project() {
-  const params = useParams();
+  const ASSISTANT_PANEL_WIDTH_KEY = "project-assistant-panel-width";
+  const DEFAULT_ASSISTANT_PANEL_WIDTH = 380;
+  const MIN_ASSISTANT_PANEL_WIDTH = 300;
+  const MAX_ASSISTANT_PANEL_WIDTH = 560;
+
+  const { id: projectId = "" } = useParams();
   const queryClient = useQueryClient();
-  const projectId = params.id ?? "1";
+  const { resolvedTheme } = useTheme();
+  const { project, workspace, threads, executions, isLoading } =
+    useProjectData(projectId);
+  const {
+    renameProject,
+    runPrompt,
+    isPromptRunning,
+    cancelPrompt,
+    renameThread,
+    deleteThread,
+    forceMerge,
+    isForceMerging,
+    undoToPrompt,
+    isUndoing,
+    executionWorkspacePaths,
+    reopenStreamsForExecutions,
+  } = useProjectActions({
+    projectId,
+    workspaceId: workspace?.id,
+  });
+
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(
+    null,
+  );
+  const [hasManuallySelectedThread, setHasManuallySelectedThread] =
+    useState(false);
+
+  // Automatically select latest thread on load
+  useEffect(() => {
+    if (threads.length > 0 && !activeThreadId && !hasManuallySelectedThread) {
+      setActiveThreadId(threads[0].id);
+    }
+  }, [threads, activeThreadId, hasManuallySelectedThread]);
+
+  const activeExecutions = useMemo(() => {
+    if (!activeThreadId) return [];
+    return executions.filter((exec) => exec.threadId === activeThreadId);
+  }, [executions, activeThreadId]);
+
+  // Reopen SSE streams for any in-flight executions that survived a page reload
+  useEffect(() => {
+    if (executions.length > 0) {
+      reopenStreamsForExecutions(executions);
+    }
+  }, [executions, reopenStreamsForExecutions]);
+
+  const { data: modelsRes } = useQuery({
+    queryKey: ["models"],
+    queryFn: () => getModels().then((res) => res.data),
+    placeholderData: [],
+  });
+  const models = (modelsRes || []) as { id: string; displayName: string }[];
+
+  const isAnyExecutionRunning = useMemo(
+    () =>
+      activeExecutions.some(
+        (exec) => exec.status === "queued" || exec.status === "running",
+      ),
+    [activeExecutions],
+  );
 
   const [isAssistantPanelOpen, setIsAssistantPanelOpen] = useState(true);
-  const [localProjectName, setLocalProjectName] = useState(
-    `Project #${projectId}`,
+  const [isContextualInspectorOpen, setIsContextualInspectorOpen] =
+    useState(true);
+  const [assistantPanelWidth, setAssistantPanelWidth] = useState(
+    DEFAULT_ASSISTANT_PANEL_WIDTH,
   );
+  const [isResizingAssistantPanel, setIsResizingAssistantPanel] =
+    useState(false);
+  const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
+  const [localProjectName, setLocalProjectName] = useState("");
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<Artifact | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("code");
+  const [workspaceSource, setWorkspaceSource] =
+    useState<WorkspaceSource>("execution_draft");
+  const [editorWordWrap, setEditorWordWrap] = useState(false);
+  const [editorFontSize, setEditorFontSize] = useState(13);
+  const splitLayoutRef = useRef<HTMLDivElement | null>(null);
 
-  const { data: projectResponse, isLoading } = useQuery({
-    queryKey: ["project", projectId],
-    queryFn: () => getProject(projectId),
-  });
-
-  const project = projectResponse?.data;
-
-  // Sync state if backend loaded
   useEffect(() => {
-    if (project?.name && !isEditingProjectName) {
-      setLocalProjectName(project.name);
+    if (activeExecutions.length === 0) {
+      setSelectedExecutionId(null);
+      return;
     }
-  }, [project?.name, isEditingProjectName]);
 
-  const updateProjectMutation = useMutation({
-    mutationFn: (newName: string) =>
-      updateProject(projectId, { name: newName }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-    },
+    const hasSelectedExecution = activeExecutions.some(
+      (execution) => execution.id === selectedExecutionId,
+    );
+
+    if (!hasSelectedExecution) {
+      setSelectedExecutionId(
+        activeExecutions[activeExecutions.length - 1]?.id ?? null,
+      );
+    }
+  }, [activeExecutions, selectedExecutionId]);
+
+  const selectedExecution = useMemo(
+    () =>
+      activeExecutions.find(
+        (execution) => execution.id === selectedExecutionId,
+      ) ?? null,
+    [activeExecutions, selectedExecutionId],
+  );
+  const latestExecution = useMemo(
+    () => activeExecutions[activeExecutions.length - 1] ?? null,
+    [activeExecutions],
+  );
+
+  // Derive the filesystem path to open in VSCode:
+  // - During a running execution: use the live worktreeDir from the SSE workspace:path event
+  // - After completion/conflict (or no running execution): use the workspacePath from that event
+  const liveDir = useMemo(() => {
+    if (!selectedExecution) return undefined;
+    const paths = executionWorkspacePaths.get(selectedExecution.id);
+    if (!paths) return undefined;
+    const isRunning =
+      selectedExecution.status === "running" ||
+      selectedExecution.status === "queued";
+    return isRunning
+      ? (paths.worktreeDir ?? paths.workspacePath)
+      : paths.workspacePath;
+  }, [selectedExecution, executionWorkspacePaths]);
+  const previousExecution = useMemo<Execution | null>(() => {
+    if (!selectedExecution) return null;
+    const selectedIndex = activeExecutions.findIndex(
+      (execution) => execution.id === selectedExecution.id,
+    );
+    if (selectedIndex <= 0) return null;
+    return activeExecutions[selectedIndex - 1] ?? null;
+  }, [activeExecutions, selectedExecution]);
+  const { data: artifactsRes } = useQuery({
+    queryKey: ["artifacts", selectedExecution?.id],
+    queryFn: () =>
+      selectedExecution?.id
+        ? getArtifacts(selectedExecution.id)
+        : Promise.resolve({ data: [] }),
+    enabled: !!selectedExecution?.id,
   });
+  const artifacts = useMemo(
+    () =>
+      (artifactsRes?.data || []).filter((artifact) => artifact.type === "file"),
+    [artifactsRes?.data],
+  );
+  const { data: previousArtifactsRes } = useQuery({
+    queryKey: ["artifacts", previousExecution?.id],
+    queryFn: () =>
+      previousExecution?.id
+        ? getArtifacts(previousExecution.id)
+        : Promise.resolve({ data: [] }),
+    enabled: !!previousExecution?.id,
+  });
+  const previousArtifacts = useMemo(
+    () =>
+      (previousArtifactsRes?.data || []).filter(
+        (artifact) => artifact.type === "file",
+      ),
+    [previousArtifactsRes?.data],
+  );
 
-  const finishProjectNameEdit = () => {
-    const trimmed = localProjectName.trim();
-    if (trimmed.length > 0 && trimmed !== project?.name) {
-      updateProjectMutation.mutate(trimmed);
-    } else {
-      setLocalProjectName(project?.name || `Project #${projectId}`);
+  // The latest execution that was successfully merged (for the "main" source view)
+  const latestMergedExecution = useMemo(
+    () =>
+      [...activeExecutions]
+        .reverse()
+        .find((exec) => exec.status === "completed" && exec.mergedCommitHash) ??
+      null,
+    [activeExecutions],
+  );
+  const { data: mainArtifactsRes } = useQuery({
+    queryKey: ["artifacts", latestMergedExecution?.id, "main"],
+    queryFn: () =>
+      latestMergedExecution?.id
+        ? getArtifacts(latestMergedExecution.id)
+        : Promise.resolve({ data: [] }),
+    enabled: !!latestMergedExecution?.id,
+  });
+  const mainArtifacts = useMemo(
+    () =>
+      (mainArtifactsRes?.data || []).filter(
+        (artifact) => artifact.type === "file",
+      ),
+    [mainArtifactsRes?.data],
+  );
+
+  const displayedArtifacts = useMemo(() => {
+    if (workspaceSource === "main") {
+      return mainArtifacts.length > 0 ? mainArtifacts : previousArtifacts;
+    }
+    // execution_draft and conflicted_draft both use the selected execution's artifacts
+    return artifacts.length > 0 ? artifacts : previousArtifacts;
+  }, [workspaceSource, artifacts, previousArtifacts, mainArtifacts]);
+  const editorTheme = resolvedTheme === "light" ? "vs" : "vs-dark";
+
+  useEffect(() => {
+    if (
+      selectedExecution?.status === "running" ||
+      selectedExecution?.status === "queued"
+    ) {
+      setWorkspaceMode("timeline");
+    }
+
+    // Auto-expand terminal on error
+    if (selectedExecution?.status === "failed") {
+      setIsTerminalExpanded(true);
+    }
+
+    // Auto-open assistant panel on conflict so user sees the resolution actions
+    if (selectedExecution?.status === "conflicted") {
+      setIsAssistantPanelOpen(true);
+    }
+  }, [selectedExecution?.id, selectedExecution?.status]);
+
+  const availableWorkspaceSources = useMemo(
+    () => getAvailableWorkspaceSources(selectedExecution ?? null),
+    [selectedExecution],
+  );
+
+  useEffect(() => {
+    const nextSource = getDefaultWorkspaceSource(selectedExecution ?? null);
+    setWorkspaceSource((current) =>
+      availableWorkspaceSources.includes(current) ? current : nextSource,
+    );
+  }, [availableWorkspaceSources, selectedExecution]);
+
+  const detectLanguage = (file: Artifact | null) => {
+    if (!file) return "typescript";
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith(".tsx") || lower.endsWith(".ts")) return "typescript";
+    if (lower.endsWith(".jsx") || lower.endsWith(".js")) return "javascript";
+    if (lower.endsWith(".json")) return "json";
+    if (lower.endsWith(".css")) return "css";
+    if (lower.endsWith(".md")) return "markdown";
+    if (lower.endsWith(".html")) return "html";
+    return "plaintext";
+  };
+
+  const getEditorContent = (file: Artifact | null) => {
+    if (!file) return "// Select a file to view source content...";
+
+    try {
+      const metadata = file.metadata ? JSON.parse(file.metadata) : null;
+      if (metadata?.content && typeof metadata.content === "string") {
+        return metadata.content;
+      }
+    } catch {
+      // fallback to raw metadata
+    }
+
+    return file.metadata || `// ${file.name}\n// Content preview unavailable.`;
+  };
+
+  const getVisibleEditorContext = (file: Artifact | null) => {
+    if (!file) return undefined;
+
+    const content = getEditorContent(file);
+
+    return {
+      activeFilePath: file.filePath || file.name,
+      visibleContent: content.slice(0, 4000),
+    };
+  };
+
+  const previewSource = useMemo(() => {
+    const htmlArtifact = displayedArtifacts.find((artifact) =>
+      artifact.name.toLowerCase().endsWith(".html"),
+    );
+
+    if (!htmlArtifact) return null;
+
+    const resolveAssetPath = (basePath: string, target: string) => {
+      if (
+        !target ||
+        /^(https?:)?\/\//i.test(target) ||
+        target.startsWith("/")
+      ) {
+        return target.replace(/^\//, "");
+      }
+
+      const cleanTarget = target.split("?")[0]?.split("#")[0] || target;
+      const baseParts = basePath.split("/").filter(Boolean);
+      baseParts.pop();
+
+      for (const part of cleanTarget.split("/")) {
+        if (!part || part === ".") continue;
+        if (part === "..") {
+          baseParts.pop();
+          continue;
+        }
+        baseParts.push(part);
+      }
+
+      return baseParts.join("/");
+    };
+
+    const readArtifact = (filePath: string) => {
+      const match = displayedArtifacts.find(
+        (artifact) =>
+          artifact.filePath === filePath || artifact.name === filePath,
+      );
+      if (!match?.metadata) return null;
+
+      try {
+        const metadata = JSON.parse(match.metadata) as { content?: unknown };
+        return typeof metadata.content === "string" ? metadata.content : null;
+      } catch {
+        return null;
+      }
+    };
+
+    try {
+      const metadata = htmlArtifact.metadata
+        ? JSON.parse(htmlArtifact.metadata)
+        : null;
+      if (metadata?.content && typeof metadata.content === "string") {
+        let html = metadata.content as string;
+
+        html = html.replace(
+          /<link\s+([^>]*?)rel=["']stylesheet["']([^>]*?)href=["']([^"']+)["']([^>]*?)>/gi,
+          (
+            full,
+            before: string,
+            middle: string,
+            href: string,
+            after: string,
+          ) => {
+            if (/^(https?:)?\/\//i.test(href)) return full;
+            const css = readArtifact(
+              resolveAssetPath(
+                htmlArtifact.filePath || htmlArtifact.name,
+                href,
+              ),
+            );
+            if (!css) return full;
+            const attrs = `${before}${middle}${after}`.trim();
+            return `<style data-preview-inline="${href}"${attrs ? ` ${attrs}` : ""}>${css}</style>`;
+          },
+        );
+
+        html = html.replace(
+          /<script\s+([^>]*?)src=["']([^"']+)["']([^>]*?)><\/script>/gi,
+          (full, before: string, src: string, after: string) => {
+            if (/^(https?:)?\/\//i.test(src)) return full;
+            const js = readArtifact(
+              resolveAssetPath(htmlArtifact.filePath || htmlArtifact.name, src),
+            );
+            if (!js) return full;
+            const attrs = `${before}${after}`.trim();
+            return `<script data-preview-inline="${src}"${attrs ? ` ${attrs}` : ""}>${js}</script>`;
+          },
+        );
+
+        html = html.replace("</head>", `<base href="about:srcdoc" />\n</head>`);
+
+        html = html.replace(
+          "</body>",
+          `<script>
+document.addEventListener("click", function (event) {
+  var link = event.target instanceof Element ? event.target.closest("a") : null;
+  if (!link) return;
+  var href = link.getAttribute("href") || "";
+  if (!href || href.startsWith("#") || href.startsWith("javascript:") || /^(https?:|mailto:|tel:)/i.test(href)) {
+    return;
+  }
+  event.preventDefault();
+});
+</script>\n</body>`,
+        );
+
+        return html;
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  }, [displayedArtifacts]);
+
+  useEffect(() => {
+    if (project?.name && !isEditingProjectName)
+      setLocalProjectName(project.name);
+  }, [project, isEditingProjectName]);
+
+  useEffect(() => {
+    const storedWidth = window.localStorage.getItem(ASSISTANT_PANEL_WIDTH_KEY);
+    if (!storedWidth) return;
+    const parsedWidth = Number.parseInt(storedWidth, 10);
+    if (Number.isNaN(parsedWidth)) return;
+    setAssistantPanelWidth(
+      Math.min(
+        MAX_ASSISTANT_PANEL_WIDTH,
+        Math.max(MIN_ASSISTANT_PANEL_WIDTH, parsedWidth),
+      ),
+    );
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      ASSISTANT_PANEL_WIDTH_KEY,
+      String(assistantPanelWidth),
+    );
+  }, [assistantPanelWidth]);
+
+  // Set default selected file
+  useEffect(() => {
+    if (displayedArtifacts.length === 0) {
+      setSelectedFile(null);
+      return;
+    }
+
+    if (selectedFile) {
+      const matchingArtifact = displayedArtifacts.find((artifact) => {
+        const selectedPath = selectedFile.filePath || selectedFile.name;
+        const artifactPath = artifact.filePath || artifact.name;
+        return artifact.id === selectedFile.id || artifactPath === selectedPath;
+      });
+
+      if (matchingArtifact) {
+        if (matchingArtifact.id !== selectedFile.id) {
+          setSelectedFile(matchingArtifact);
+        }
+        return;
+      }
+    }
+
+    const mainFile =
+      displayedArtifacts.find(
+        (a) => a.name.includes("App") || a.name.includes("index"),
+      ) || displayedArtifacts[0];
+    setSelectedFile(mainFile);
+  }, [displayedArtifacts, selectedFile]);
+
+  const handleFinishRename = () => {
+    if (localProjectName.trim() && localProjectName !== project?.name) {
+      renameProject(localProjectName.trim());
     }
     setIsEditingProjectName(false);
   };
 
-  const handleProjectNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      finishProjectNameEdit();
-      return;
-    }
-
-    if (event.key === "Escape") {
-      setLocalProjectName(project?.name || `Project #${projectId}`);
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter") handleFinishRename();
+    if (e.key === "Escape") {
+      setLocalProjectName(project?.name || "");
       setIsEditingProjectName(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <ProtectedRoute>
-        <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">
-          Loading project...
-        </div>
-      </ProtectedRoute>
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["artifacts"] });
+    queryClient.invalidateQueries({ queryKey: ["executions"] });
+  };
+
+  const handleAssistantResizeStart = () => {
+    if (!isAssistantPanelOpen) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const splitLayoutElement = splitLayoutRef.current;
+      if (!splitLayoutElement) return;
+
+      const bounds = splitLayoutElement.getBoundingClientRect();
+      const nextWidth = event.clientX - bounds.left;
+      setAssistantPanelWidth(
+        Math.min(
+          MAX_ASSISTANT_PANEL_WIDTH,
+          Math.max(MIN_ASSISTANT_PANEL_WIDTH, nextWidth),
+        ),
+      );
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingAssistantPanel(false);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    setIsResizingAssistantPanel(true);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+  const executionData = useExecutionData({
+    execution: selectedExecution,
+    previousExecution,
+    artifacts,
+    previousArtifacts,
+  });
+
+  const onOpenFile = (path: string) => {
+    const match = displayedArtifacts.find(
+      (artifact) => artifact.filePath === path || artifact.name === path,
     );
-  }
+    if (match) {
+      setSelectedFile(match);
+    }
+  };
+
+  if (isLoading)
+    return (
+      <div className="flex h-screen items-center justify-center bg-background text-muted-foreground font-medium animate-in fade-in duration-700">
+        Spawning environment...
+      </div>
+    );
 
   return (
     <ProtectedRoute>
-      <div className="h-[100dvh] overflow-hidden bg-background text-foreground">
-        <div className="flex h-full">
+      <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden font-sans selection:bg-primary/20">
+        <div ref={splitLayoutRef} className="flex flex-1 min-h-0">
+          {/* Assistant Sidebar */}
           <aside
-            className={[
-              "hidden h-full shrink-0 flex-col overflow-hidden bg-[hsl(var(--vibe-panel-2))] transition-[width,min-width,opacity,border-color] duration-200 ease-out md:flex",
-              isAssistantPanelOpen
-                ? "w-[376px] min-w-[376px] border-r border-border opacity-100"
-                : "w-0 min-w-0 border-r border-transparent opacity-0 pointer-events-none",
-            ].join(" ")}
-            aria-hidden={!isAssistantPanelOpen}
+            className={`relative flex flex-col border-r border-border/30 bg-card/15 transition-[width] duration-200 ease-out ${isAssistantPanelOpen ? "overflow-visible" : "overflow-hidden border-transparent"}`}
+            style={{
+              width: isAssistantPanelOpen ? `${assistantPanelWidth}px` : "0px",
+            }}
           >
-            <div
-              className={[
-                "flex h-10 shrink-0 w-[376px] items-center justify-between border-b bg-[hsl(var(--vibe-panel-2))] px-2 transition-opacity duration-150",
-                isAssistantPanelOpen
-                  ? "border-border opacity-100"
-                  : "border-transparent opacity-0",
-              ].join(" ")}
-            >
-              <div className="flex items-center gap-1.5">
+            <div className="flex h-8 min-w-0 items-center justify-between border-b border-border/30 px-2.5">
+              <div className="flex items-center gap-2">
                 <Link
                   to="/apps"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  className="group rounded-md p-1.5 transition-colors hover:bg-secondary/50"
                 >
-                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <ArrowLeft className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                 </Link>
                 {isEditingProjectName ? (
                   <input
-                    value={localProjectName}
-                    onChange={(event) =>
-                      setLocalProjectName(event.target.value)
-                    }
-                    onBlur={finishProjectNameEdit}
-                    onKeyDown={handleProjectNameKeyDown}
-                    maxLength={40}
                     autoFocus
-                    disabled={updateProjectMutation.isPending}
-                    className="h-6 w-36 rounded-sm border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none disabled:opacity-50"
-                    aria-label="Edit project name"
+                    value={localProjectName}
+                    onChange={(e) => setLocalProjectName(e.target.value)}
+                    onBlur={handleFinishRename}
+                    onKeyDown={handleKeyDown}
+                    className="bg-transparent outline-none border-b border-foreground/30 text-sm font-semibold text-foreground px-0.5 w-36"
                   />
                 ) : (
-                  <div className="flex items-center gap-1">
-                    <span className="max-w-[132px] truncate text-xs font-medium">
-                      {project?.name || localProjectName}
+                  <div
+                    className="flex items-center gap-1 group cursor-pointer"
+                    onClick={() => setIsEditingProjectName(true)}
+                  >
+                    <span className="max-w-36 truncate text-sm font-medium text-foreground/90">
+                      {project?.name}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingProjectName(true)}
-                      className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                      aria-label="Edit project name"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
+                    <Pencil className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 )}
               </div>
-              <ModeToggle />
             </div>
-
-            <div className="w-[376px] flex-1">
-              <VibeAssistantThread />
+            <div className="flex-1 min-h-0">
+              <VibeAssistantThread
+                executions={activeExecutions}
+                threads={threads}
+                activeThreadId={activeThreadId}
+                selectedExecutionId={selectedExecutionId}
+                onSelectThread={(id) => {
+                  setActiveThreadId(id);
+                  setHasManuallySelectedThread(true);
+                }}
+                onSelectExecution={setSelectedExecutionId}
+                onShowTimeline={(execId) => {
+                  setSelectedExecutionId(execId);
+                  setWorkspaceMode("timeline");
+                }}
+                onSendPrompt={(prompt, modelId) =>
+                  runPrompt(
+                    {
+                      prompt,
+                      modelId,
+                      threadId: activeThreadId || undefined,
+                      editorContext: getVisibleEditorContext(selectedFile),
+                    },
+                    {
+                      onSuccess: (res: any) => {
+                        if (!activeThreadId && res?.data?.threadId) {
+                          setActiveThreadId(res.data.threadId);
+                        }
+                      },
+                    },
+                  )
+                }
+                isSending={isPromptRunning || isAnyExecutionRunning}
+                models={models}
+                runningModelId={
+                  isAnyExecutionRunning ? latestExecution?.modelId : undefined
+                }
+                onRenameThread={(threadId, title) =>
+                  renameThread({ threadId, title })
+                }
+                onDeleteThread={(threadId) => deleteThread(threadId)}
+                onForceMerge={(executionId) => forceMerge(executionId)}
+                onUndoExecution={(executionId) => undoToPrompt(executionId)}
+                isForceMerging={isForceMerging}
+                isUndoing={isUndoing}
+                onSetWorkspaceMode={setWorkspaceMode}
+                onSetWorkspaceSource={setWorkspaceSource}
+              />
             </div>
           </aside>
 
-          <section className="relative flex h-full min-w-0 flex-1 flex-col bg-[hsl(var(--vibe-workspace))]">
-            <div className="flex h-10 items-center justify-between border-b border-border bg-[hsl(var(--vibe-panel-2))] px-2">
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setIsAssistantPanelOpen((prev) => !prev)}
-                  className="mr-1 inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                  aria-label={
-                    isAssistantPanelOpen
-                      ? "Close assistant panel"
-                      : "Open assistant panel"
-                  }
-                >
-                  <PanelLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-7 cursor-pointer items-center justify-center rounded-md bg-secondary/80 px-2.5 text-xs font-medium text-foreground transition-colors"
-                >
-                  App
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  Code
-                </button>
-                <div className="mx-1 h-3.5 w-px bg-border"></div>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <Github className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                </button>
-                <div className="mx-1 h-3.5 w-px bg-border"></div>
-                <button
-                  type="button"
-                  className="inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <Globe className="h-3.5 w-3.5" /> Deploy
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </button>
-                <div className="ml-2 h-6 w-6 overflow-hidden rounded-full ring-1 ring-border/50">
-                  <img
-                    src="https://github.com/shadcn.png"
-                    alt="Avatar"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              </div>
+          {isAssistantPanelOpen ? (
+            <div
+              className={[
+                "group relative z-20 w-1 cursor-col-resize select-none bg-transparent transition-colors",
+                isResizingAssistantPanel
+                  ? "bg-primary/25"
+                  : "hover:bg-primary/20",
+              ].join(" ")}
+              onMouseDown={handleAssistantResizeStart}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize assistant panel"
+            >
+              <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/50 group-hover:bg-primary/45" />
             </div>
+          ) : null}
 
-            <div className="flex h-9 items-center justify-between border-b border-border bg-[hsl(var(--vibe-workspace))] px-2">
-              <div className="flex w-full items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setIsAssistantPanelOpen((prev) => !prev)}
-                  className="relative inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                  aria-label={
-                    isAssistantPanelOpen
-                      ? "Close assistant panel"
-                      : "Open assistant panel"
-                  }
-                >
-                  <PanelLeft className="h-3.5 w-3.5" />
-                  {isAssistantPanelOpen ? (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground">
-                      5
-                    </span>
-                  ) : null}
-                </button>
-                <div className="mx-1 h-3.5 w-px bg-border"></div>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                >
-                  <RotateCw className="h-3 w-3" />
-                </button>
+          {/* Main Workspace */}
+          <main className="flex-1 flex flex-col min-w-0 bg-background">
+            <WorkspaceTopbar
+              execution={selectedExecution}
+              workspaceMode={workspaceMode}
+              workspaceSource={workspaceSource}
+              sourceOptions={availableWorkspaceSources}
+              isAssistantPanelOpen={isAssistantPanelOpen}
+              isInspectorOpen={isContextualInspectorOpen}
+              isTerminalOpen={isTerminalExpanded}
+              liveDir={liveDir}
+              onWorkspaceModeChange={setWorkspaceMode}
+              onWorkspaceSourceChange={setWorkspaceSource}
+              onToggleAssistant={() =>
+                setIsAssistantPanelOpen(!isAssistantPanelOpen)
+              }
+              onToggleInspector={() =>
+                setIsContextualInspectorOpen(!isContextualInspectorOpen)
+              }
+              onToggleTerminal={() =>
+                setIsTerminalExpanded((previous) => !previous)
+              }
+            />
 
-                <div className="mx-2 flex h-6 max-w-md flex-1 items-center gap-1.5 rounded-md border border-border/40 bg-black/5 px-2 text-[11px] text-muted-foreground transition-colors hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10">
-                  <Globe className="h-3 w-3 opacity-60" />
-                  <span className="truncate tracking-wide">
-                    /projects/{projectId}
-                  </span>
-                </div>
-
-                <div className="ml-auto flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                  >
-                    <Monitor className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex min-h-0 flex-1">
-              <div className="hidden w-56 flex-col border-r border-border bg-[hsl(var(--vibe-panel-2))] lg:flex">
-                <div className="flex h-7 items-center justify-between border-b border-border px-2.5 text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
-                  <span>Explorer</span>
-                  <span className="cursor-pointer hover:text-foreground">
-                    ...
-                  </span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-1.5 scrollbar-thin">
-                  {files.map((name) => {
-                    const isSelected = name.trim() === "App.tsx";
-                    return (
-                      <button
-                        key={name}
-                        className={[
-                          "flex w-full cursor-pointer items-center rounded-sm px-2 py-0.5 text-left text-[11px]",
-                          isSelected
-                            ? "bg-secondary text-foreground"
-                            : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors",
-                        ].join(" ")}
-                      >
-                        {name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex min-w-0 flex-1 flex-col bg-[hsl(var(--vibe-editor))]">
-                <div className="flex h-8 items-center border-b border-border bg-[hsl(var(--vibe-panel-2))] text-[11px]">
-                  <div className="flex h-full items-center border-r border-border border-b border-b-sky-500 px-3 text-sky-400 bg-[hsl(var(--vibe-editor))]">
-                    App.tsx
-                  </div>
-                  <div className="flex h-full items-center border-r border-border px-3 text-muted-foreground hover:bg-secondary/30 cursor-pointer transition-colors">
-                    tailwind.config.js
-                  </div>
-                </div>
-                <div className="flex h-6 items-center border-b border-border px-3 text-[10px] text-muted-foreground bg-[hsl(var(--vibe-editor))]">
-                  vibe-clone <span className="mx-1.5 opacity-50">&gt;</span> src{" "}
-                  <span className="mx-1.5 opacity-50">&gt;</span> App.tsx
-                </div>
-                <div className="flex-1 overflow-auto p-2 font-mono text-[11px] text-muted-foreground scrollbar-thin">
-                  {editorCode.map((line, idx) => (
-                    <div
-                      key={`${line}-${idx}`}
-                      className="flex leading-5 hover:bg-secondary/30"
-                    >
-                      <span className="w-8 pr-3 text-right opacity-40 select-none">
-                        {122 + idx}
-                      </span>
-                      <span className="whitespace-pre">{line}</span>
+            {/* Editor Area */}
+            <div className="flex-1 flex min-h-0 bg-background">
+              {/* Explorer + Editor (Code Mode) */}
+              {workspaceMode === "code" ? (
+                <>
+                  <div className="flex w-52 shrink-0 flex-col border-r border-border/30 bg-card/15">
+                    <div className="flex h-8 items-center justify-between border-b border-border/30 bg-muted/10 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                      Explorer
+                      <RotateCw
+                        onClick={handleRefresh}
+                        className="size-3 cursor-pointer hover:text-primary transition-all active:rotate-180"
+                      />
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="flex-1 overflow-y-auto py-2 scrollbar-none">
+                      <div className="group flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary/20">
+                        <ChevronDown className="size-3 group-hover:text-foreground transition-colors" />
+                        <Folder className="size-3.5 text-muted-foreground/80" />
+                        <span className="font-semibold group-hover:text-foreground tracking-tight">
+                          src
+                        </span>
+                      </div>
+                      {displayedArtifacts.length === 0 ? (
+                        isAnyExecutionRunning ? (
+                          <div className="flex flex-col gap-1.5 px-6 py-2">
+                            {[60, 80, 50, 70].map((w, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <div className="size-3 rounded-sm bg-muted/40 animate-pulse" />
+                                <div
+                                  className="h-3 rounded bg-muted/40 animate-pulse"
+                                  style={{ width: `${w}%` }}
+                                />
+                              </div>
+                            ))}
+                            <p className="mt-1 text-[10px] text-muted-foreground/50 italic">
+                              Agent is writing files...
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="px-8 py-3 text-xs text-muted-foreground/50 italic font-medium">
+                            No files synthesized
+                          </div>
+                        )
+                      ) : (
+                        displayedArtifacts.map((file) => (
+                          <div
+                            key={file.id}
+                            onClick={() => setSelectedFile(file)}
+                            className={`flex cursor-pointer items-center gap-2 border-r-2 px-6 py-1.5 text-xs transition-colors ${selectedFile?.id === file.id ? "border-primary bg-primary/6 font-medium text-primary" : "border-transparent text-muted-foreground/80 hover:bg-secondary/15 hover:text-foreground"}`}
+                          >
+                            <FileCode
+                              className={`size-3.5 ${selectedFile?.id === file.id ? "text-primary" : "text-muted-foreground/40"}`}
+                            />
+                            <span className="truncate">{file.name}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 flex flex-col min-w-0 bg-background">
+                    <div className="flex h-8 items-center gap-0.5 border-b border-border/30 bg-card/15 px-1">
+                      {selectedFile ? (
+                        <div className="flex h-full items-center gap-2.5 border-t-2 border-primary bg-card/60 px-4 text-xs font-medium text-foreground animate-in slide-in-from-top-1 duration-300">
+                          <FileCode className="size-3.5 text-primary" />
+                          {selectedFile.name}
+                        </div>
+                      ) : (
+                        <div className="h-full flex items-center gap-2.5 px-4 italic text-muted-foreground text-xs opacity-50">
+                          No file open
+                        </div>
+                      )}
+                      <div className="ml-auto flex items-center gap-1 px-2 text-xs text-muted-foreground">
+                        <button
+                          type="button"
+                          onClick={() => setEditorWordWrap((prev) => !prev)}
+                          className="rounded px-1.5 py-0.5 hover:bg-secondary/40 hover:text-foreground transition-colors"
+                        >
+                          Wrap {editorWordWrap ? "On" : "Off"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditorFontSize((prev) => Math.max(prev - 1, 11))
+                          }
+                          className="rounded px-1.5 py-0.5 hover:bg-secondary/40 hover:text-foreground transition-colors"
+                        >
+                          A-
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditorFontSize((prev) => Math.min(prev + 1, 16))
+                          }
+                          className="rounded px-1.5 py-0.5 hover:bg-secondary/40 hover:text-foreground transition-colors"
+                        >
+                          A+
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex-1 pt-1 overflow-hidden relative">
+                      {!selectedFile && (
+                        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                          <div className="flex flex-col items-center gap-4 text-muted-foreground/20">
+                            <FileCode className="size-16" />
+                            <span className="text-sm font-bold tracking-widest uppercase">
+                              Workspace Ready
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <Editor
+                        theme={editorTheme}
+                        language={detectLanguage(selectedFile)}
+                        value={getEditorContent(selectedFile)}
+                        loading={
+                          <div className="p-3 text-xs text-muted-foreground">
+                            Loading editor...
+                          </div>
+                        }
+                        options={{
+                          fontSize: editorFontSize,
+                          fontFamily:
+                            "'JetBrains Mono', 'Fira Code', monospace",
+                          minimap: { enabled: false },
+                          scrollBeyondLastLine: false,
+                          lineNumbers: "on",
+                          padding: { top: 12 },
+                          renderLineHighlight: "all",
+                          automaticLayout: true,
+                          wordWrap: editorWordWrap ? "on" : "off",
+                          bracketPairColorization: { enabled: true },
+                          guides: { indentation: true },
+                          scrollbar: {
+                            vertical: "visible",
+                            horizontal: "visible",
+                            verticalScrollbarSize: 8,
+                            horizontalScrollbarSize: 8,
+                          },
+                          readOnly: true,
+                          cursorSmoothCaretAnimation: "on",
+                          smoothScrolling: true,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              {/* App Mode */}
+              {workspaceMode === "app" ? (
+                <WorkspaceAppPreview
+                  execution={selectedExecution}
+                  workspaceSource={workspaceSource}
+                  previewSource={previewSource}
+                  hasPreviewArtifact={displayedArtifacts.some((artifact) =>
+                    artifact.name.toLowerCase().endsWith(".html"),
+                  )}
+                  onOpenCode={() => setWorkspaceMode("code")}
+                  onOpenReview={() => setWorkspaceMode("review")}
+                  onRun={() =>
+                    runPrompt({
+                      prompt: "Re-run current logic",
+                      modelId:
+                        selectedExecution?.modelId || "gemini-3-flash-preview",
+                      threadId: activeThreadId || undefined,
+                      editorContext: getVisibleEditorContext(selectedFile),
+                    })
+                  }
+                />
+              ) : null}
+
+              {/* Dynamic Center View for Details/Timeline/Review */}
+              {["details", "timeline", "review"].includes(workspaceMode) ? (
+                <ExecutionCenterView
+                  workspaceMode={workspaceMode}
+                  data={executionData}
+                  editorTheme={editorTheme}
+                  onOpenFile={onOpenFile}
+                />
+              ) : null}
+
+              {/* Contextual Inspector */}
+              {isContextualInspectorOpen &&
+                ["details", "review"].includes(workspaceMode) && (
+                  <WorkspaceInspector
+                    workspaceMode={workspaceMode}
+                    workspaceSource={workspaceSource}
+                    execution={selectedExecution}
+                    selectedFile={selectedFile}
+                    executionData={executionData}
+                    onOpenFile={onOpenFile}
+                  />
+                )}
             </div>
 
-            <div className="h-[160px] flex flex-col border-t border-border bg-[hsl(var(--vibe-terminal))]">
-              <div className="flex h-7 items-center justify-between border-b border-border px-3 text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-                <div className="flex items-center gap-3">
-                  <span className="cursor-pointer hover:text-foreground transition-colors">
-                    Problems
-                  </span>
-                  <span className="cursor-pointer hover:text-foreground transition-colors">
-                    Output
-                  </span>
-                  <span className="cursor-pointer hover:text-foreground transition-colors">
-                    Debug Console
-                  </span>
-                  <span className="text-foreground border-b border-foreground h-7 flex items-center">
+            {isTerminalExpanded ? (
+              <footer className="z-20 flex h-64 flex-col border-t border-border/40 bg-card/20 transition-all duration-300 ease-in-out">
+                <div className="flex h-11 shrink-0 items-center gap-3 border-b border-border/40 px-4">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-foreground/80">
+                    <TerminalIcon className="size-3.5 text-primary" />
                     Terminal
-                  </span>
-                  <span className="cursor-pointer hover:text-foreground transition-colors">
-                    Ports
-                  </span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {selectedExecution?.status === "failed"
+                      ? "Latest failure details"
+                      : selectedExecution?.status === "running" ||
+                          selectedExecution?.status === "queued"
+                        ? "Execution is running"
+                        : "Session output"}
+                  </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    {(selectedExecution?.status === "running" ||
+                      selectedExecution?.status === "queued") && (
+                      <button
+                        onClick={() => cancelPrompt(selectedExecution.id)}
+                        className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-destructive transition-all hover:bg-destructive/15 hover:text-destructive"
+                      >
+                        <Square className="size-3.5 fill-current" /> Stop
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        runPrompt({
+                          prompt: "Re-run current logic",
+                          modelId:
+                            selectedExecution?.modelId ||
+                            "gemini-3-flash-preview",
+                          threadId: activeThreadId || undefined,
+                          editorContext: getVisibleEditorContext(selectedFile),
+                        });
+                      }}
+                      className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-vibe-success transition-all hover:bg-vibe-success/15 hover:text-foreground"
+                    >
+                      <Play className="size-3.5 fill-current" /> Run
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsTerminalExpanded(false)}
+                      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary/35 hover:text-foreground"
+                      title="Hide Terminal"
+                    >
+                      <ChevronDown className="size-4" />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <ChevronRight className="h-3 w-3 rotate-90" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-auto bg-[hsl(var(--vibe-editor))] p-2 font-mono text-[11px] text-emerald-400 scrollbar-thin leading-5">
-                <div className="flex items-center gap-2">
-                  <span className="text-blue-400 opacity-80">➜</span>{" "}
-                  <span className="text-emerald-400">~/vibecode</span>{" "}
-                  <span className="text-muted-foreground">$</span> bun run dev
+
+                <div className="flex-1 overflow-y-auto bg-background px-5 py-4 font-mono text-xs scrollbar-thin scrollbar-thumb-white/5">
+                  <div className="mb-4 flex items-center gap-2.5">
+                    <span className="rounded-sm border border-vibe-success/20 bg-vibe-success/10 px-2 py-0.5 text-[10px] font-black tracking-tight text-vibe-success shadow-sm">
+                      SESSION
+                    </span>
+                    <span className="text-[10px] tracking-wide text-muted-foreground/40">
+                      {new Date().toLocaleTimeString()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 text-muted-foreground/90">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-vibe-success/80">➜</span>
+                      <span className="font-bold tracking-tight text-primary">
+                        vibecode
+                      </span>
+                      <span className="font-bold text-muted-foreground/50">
+                        session/{projectId.substring(0, 6)}
+                      </span>
+                      <span className="italic text-foreground/90">
+                        vibe start --watch
+                      </span>
+                    </div>
+
+                    {selectedExecution?.status === "running" ||
+                    selectedExecution?.status === "queued" ? (
+                      <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2 font-sans text-xs text-foreground/80">
+                        <div className="flex items-center gap-2 font-medium text-foreground/90">
+                          <Bot className="size-3.5 text-primary" />
+                          Timeline remains the primary place for live agent
+                          events.
+                        </div>
+                        <div className="mt-1 text-muted-foreground">
+                          Keep this panel for quick runtime control and surfaced
+                          failures.
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {selectedExecution?.errorMessage ? (
+                      <div className="rounded-md border border-red-400/20 bg-red-400/5 p-3 font-sans text-xs text-red-300">
+                        <span className="mb-1 flex items-center gap-2 font-bold">
+                          <Square className="size-3 fill-current" /> Error
+                        </span>
+                        {selectedExecution.errorMessage}
+                      </div>
+                    ) : (
+                      <div className="rounded-md border border-border/30 bg-card/30 px-3 py-2 font-sans text-xs text-muted-foreground">
+                        {selectedExecution
+                          ? "No surfaced runtime errors for this execution."
+                          : "No active execution selected."}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-1 text-yellow-400/90">
-                  VITE v8 ready in 128 ms
-                </div>
-                <div className="mt-1 text-foreground/80">
-                  Local: http://localhost:3000/
-                </div>
-              </div>
-            </div>
-          </section>
+              </footer>
+            ) : null}
+          </main>
         </div>
       </div>
     </ProtectedRoute>

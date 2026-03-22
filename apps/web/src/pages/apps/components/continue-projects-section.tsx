@@ -309,13 +309,13 @@ export function ContinueProjectsSection({
   return (
     <>
       <div className="mb-2.5 flex items-center justify-between px-1">
-        <h2 className="text-[12px] font-medium text-muted-foreground">
+        <h2 className="text-xs font-medium text-muted-foreground">
           Continue Existing Project
         </h2>
         <button
           type="button"
           onClick={() => {}}
-          className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           View all
         </button>
@@ -335,7 +335,7 @@ export function ContinueProjectsSection({
             ))}
           </div>
         ) : recentProjects.length === 0 ? (
-          <div className="px-2 py-1.5 text-[13px] text-muted-foreground">
+          <div className="px-2 py-1.5 text-sm text-muted-foreground">
             No projects found. Create one to get started.
           </div>
         ) : (
@@ -387,6 +387,7 @@ export function ContinueProjectsSection({
                 }
                 onOpenContinueConfig={onOpenContinueConfig}
                 disableRename={disableActions}
+                onOpenMenu={handleOpenProjectActionsMenu}
                 continuePreset={continuePreset}
                 onContinuePresetSelect={onContinuePresetSelect}
                 showContinueCustomize={showContinueCustomize}

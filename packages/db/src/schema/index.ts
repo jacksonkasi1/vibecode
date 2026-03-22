@@ -5,3 +5,6 @@ export * from "./workspaces";
 export * from "./executions";
 export * from "./artifacts";
 export * from "./models";
+export * from "./chat";
+export * from "./execution-events";
+export * from "./history";

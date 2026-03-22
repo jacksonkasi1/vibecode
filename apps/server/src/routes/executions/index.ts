@@ -9,7 +9,11 @@ import createRoute from "./create";
 import listRoute from "./list";
 import getRoute from "./get";
 import cancelRoute from "./cancel";
+import undoRoute from "./undo";
+import forceMergeRoute from "./force-merge";
 import streamRoute from "./stream";
+import agentsRoute from "./agents";
+import eventsRoute from "./events";
 
 // ** import types
 import type { AppEnv } from "@/types";
@@ -24,6 +28,10 @@ executionsRouter.route("/", createRoute);
 executionsRouter.route("/", listRoute);
 executionsRouter.route("/", getRoute);
 executionsRouter.route("/", cancelRoute);
+executionsRouter.route("/", undoRoute);
+executionsRouter.route("/", forceMergeRoute);
 executionsRouter.route("/", streamRoute);
+executionsRouter.route("/", agentsRoute);
+executionsRouter.route("/", eventsRoute);
 
 export default executionsRouter;

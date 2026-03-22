@@ -8,6 +8,11 @@ export interface CreateExecutionParams {
   workspaceId: string;
   prompt: string;
   modelId?: string;
+  threadId?: string;
+  editorContext?: {
+    activeFilePath?: string;
+    visibleContent?: string;
+  };
 }
 
 export interface CreateExecutionResponse {

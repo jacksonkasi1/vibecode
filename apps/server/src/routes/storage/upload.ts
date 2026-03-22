@@ -29,9 +29,9 @@ route.get("/upload-url", async (c) => {
       organizationId: organizationId || undefined,
     });
 
-    // Construct publicUrl from R2_PUBLIC_URL + filePath
-    const publicUrl = env.R2_PUBLIC_URL
-      ? `${env.R2_PUBLIC_URL}/${result.filePath}`
+    // Construct publicUrl from GCS_PUBLIC_URL + filePath
+    const publicUrl = env.GCS_PUBLIC_URL
+      ? `${env.GCS_PUBLIC_URL}/${result.filePath}`
       : result.filePath;
 
     return c.json({
