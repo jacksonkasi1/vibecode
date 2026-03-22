@@ -1,198 +1,87 @@
-# FlowStack
-
-**FlowStack** is a production-grade SaaS foundation focused on **clean architecture, clear boundaries, and long-term maintainability**.
-
-It is not a framework.
-It is not a boilerplate with magic.
-
-FlowStack is a **base repository** designed to help you build scalable products without losing control of your codebase.
+<div align="center">
+  <h1>🌊 Vibecode</h1>
+  <p><strong>A sophisticated AI-powered coding assistant and workspace platform.</strong></p>
+</div>
 
 ---
 
-## Why FlowStack?
+## 🚀 Overview
 
-Most starters focus on **tech stack choices**.
+Vibecode is a next-generation workspace designed for developers who want to collaborate seamlessly with AI. It moves beyond simple chat interfaces to provide a deep, agentic coding experience. Built on a robust, high-performance monorepo architecture, Vibecode handles complex multi-step reasoning, real-time code generation, and advanced file manipulation directly within the browser.
 
-FlowStack focuses on **flow**:
+## ✨ Key Features
 
-- how identity flows
-- how permissions flow
-- how responsibility flows
-- how code grows without becoming messy
+- **🧠 Deep Agent Orchestration:** Powered by **LangChain**, **LangGraph**, and **DeepAgents**, our worker instances run autonomous agents capable of exploring codebases, planning architectures, and executing multi-step coding tasks.
+- **⚡ Real-Time Execution Streaming:** Enjoy zero-latency feedback with **SSE (Server-Sent Events)**. Watch code, terminal outputs, and AI thought processes stream live into your workspace.
+- **📦 Artifact Generation:** Instantly generate complete files, UI components, or entire module scaffolds. The AI doesn't just suggest code; it builds tangible, deployable artifacts.
+- **🔀 Advanced Diff & Merge:** Review AI-generated changes with precision. Includes intelligent diffing, **force merge** capabilities, and seamless **undo actions** to ensure you are always in complete control of your codebase.
 
-The goal is simple:
+## 🏗️ Architecture & Tech Stack
 
-> **Make the architecture obvious, boring, and easy to evolve.**
+Vibecode is structured as a highly scalable **Turborepo** monorepo, powered by **Bun** for maximum performance.
 
----
+### 🌐 Frontend (`apps/web`)
 
-## Core Principles
+- **Framework:** React 19 + Vite + React Router DOM
+- **Styling:** Tailwind CSS v4 + Radix UI
+- **State & Data:** Zustand + React Query
+- **Editor & UI:** Monaco Editor + Assistant UI
 
-### 1. One Responsibility per File
+### ⚙️ API Server (`apps/server`)
 
-- One action per file
-- One API per file
-- One schema per file
+- **Runtime:** Bun
+- **Framework:** Hono (Edge-ready, lightning fast)
+- **Validation:** Zod
 
-No large "god files".
+### 🤖 AI Worker (`apps/worker`)
 
----
+- **Orchestration:** LangChain, LangGraph, DeepAgents
+- **Models:** Google GenAI / LLM Integrations
+- **Messaging:** Google Cloud Pub/Sub for async job processing
 
-### 2. One Responsibility per Folder
+### 💾 Data & Infrastructure (`packages/*`)
 
-Folders represent **domains**, not features.
+- **Database:** Neon (Serverless Postgres) + Drizzle ORM
+- **Auth:** Better Auth
+- **Tooling:** TypeScript 5.9, ESLint, Prettier
 
-Examples:
+## 📂 Project Structure
 
-- `auth` → identity (who are you?)
-- `access` → permissions (what can you do?)
-- `impersonation` → temporary identity
-- `platform` → operator / super-admin logic
-
-If a folder exists, the feature exists.
-No runtime feature flags.
-
----
-
-### 3. No Runtime Branching for Product Shape
-
-There are **no** `if (config.xxx)` checks inside business logic.
-
-All variability is resolved at **generation time**:
-
-- modules are included or excluded
-- unused folders are removed
-- runtime code stays clean and predictable
-
----
-
-### 4. Apps Compose, Packages Own Logic
-
-- `apps/` contain routing and wiring
-- `packages/` contain real logic
-
-Apps never own business rules.
-
----
-
-### 5. Boring Code > Clever Code
-
-FlowStack prefers:
-
-- explicit files
-- explicit imports
-- explicit boundaries
-
-Over abstraction is avoided on purpose.
-
----
-
-## Core Stack (Defaults, Not Lock-in)
-
-FlowStack is **stack-aware**, but not stack-locked.
-
-See **[docs/stack.md](./docs/stack.md)** for the default technologies and design philosophy.
-
-These are tools FlowStack is built and tested with. You can replace parts of the stack if you know what you're doing.
-
----
-
-## Authentication
-
-FlowStack uses [Better Auth](https://www.better-auth.com/) for identity management with support for:
-
-- Email/password authentication
-- Magic link authentication
-- OAuth providers (Google, GitHub, etc.)
-- Session management
-- Account settings and security
-
-For detailed setup, configuration, and troubleshooting guides, see **[docs/auth/README.md](./docs/auth/README.md)**.
-
----
-
-## High-Level Structure
-
-```
-apps/
-  web/            # Customer frontend
-  server/         # Customer API
-  super-admin/    # Operator panel (optional)
-
-packages/
-  auth/           # Identity
-  access/         # Authorization (RBAC)
-  impersonation/  # Temporary identity
-  platform/       # Operator-level control
-  db/             # Database schema & migrations
-  env/            # Typed environment
-  email/          # Email providers & templates
-  storage/        # File storage
-  workflows/      # Background jobs
+```text
+vibecode/
+├── apps/
+│   ├── web/        # The main React workspace and coding interface
+│   ├── server/     # Hono-based API Gateway and SSE streaming server
+│   └── worker/     # Heavy-lifting AI agents and LangGraph state machines
+└── packages/
+    ├── ai/         # Shared LLM tools, prompts, and agent configurations
+    ├── auth/       # Better Auth configuration and identity flow
+    ├── db/         # Drizzle schema, migrations, and database client
+    └── shared/     # Common types, utilities, and constants
 ```
 
-Each package is **independently understandable**.
+## 🏎️ Quick Start
 
----
+```bash
+# 1. Clone the repository
+git clone https://github.com/your-org/vibecode.git
+cd vibecode
 
-## Configuration
+# 2. Install dependencies using Bun
+bun install
 
-All feature decisions live in one place:
+# 3. Set up environment variables
+cp .env.example .env
 
-```ts
-flow.config.ts;
+# 4. Push database schema
+bun run --filter @repo/db db:push
+
+# 5. Start the development environment (Web, Server, and Worker)
+bun run dev
 ```
 
-This file answers **what exists**, not **how it works**.
-
-Example:
-
-- auth mode
-- super-admin enabled or not
-- impersonation enabled or not
-- deployment targets
-
-Runtime code assumes the decision is already made.
-
 ---
 
-## What This Repo Is (and Isn't)
-
-✅ A clean, extensible foundation
-✅ A reference architecture
-✅ A long-term base for real products
-
-❌ Not a "plug and play" SaaS
-❌ Not opinionated about UI design
-❌ Not a low-code framework
-
-You are expected to **build on top of it**.
-
----
-
-## Current Status
-
-FlowStack is an **active base repository**.
-
-Features will be added incrementally:
-
-- more auth flows
-- more workflow primitives
-- more deployment helpers
-
-Breaking changes may happen early while the foundation is being refined.
-
----
-
-## Philosophy
-
-> Scale is not about features.
-> Scale is about clarity.
-
-FlowStack exists to keep that clarity intact as products grow.
-
----
-
-## License
-
-MIT
+<div align="center">
+  <i>Built for developers who want to code at the speed of thought.</i>
+</div>
