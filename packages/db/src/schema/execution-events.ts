@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ** import schema
@@ -28,6 +29,9 @@ export const executionEvent = pgTable(
       table.executionId,
       table.seq,
     ),
+    executionSeqUniqueIdx: uniqueIndex(
+      "execution_event_execution_id_seq_unique_idx",
+    ).on(table.executionId, table.seq),
   }),
 );
 

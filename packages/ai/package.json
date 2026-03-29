@@ -22,7 +22,8 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^1.0.0"
+    "@google/genai": "^1.0.0",
+    "@upstash/vector": "^1.2.2"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",

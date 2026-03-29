@@ -5,6 +5,8 @@ import { logger } from "@repo/logs";
 import type { GeminiProvider } from "@repo/ai";
 
 export interface SubTask {
+  id?: string;
+  dependsOn?: string[];
   description: string;
   prompt: string;
   agentName:
@@ -18,6 +20,10 @@ export interface SubTask {
 }
 
 export interface TaskPlan {
+  title?: string;
+  summary?: string;
+  estimatedComplexity?: "low" | "medium" | "high";
+  requiresApproval?: boolean;
   /** True when the task is simple enough for a single agent; skip parallel spawning. */
   isSingleAgent: boolean;
   /** The agent to use when isSingleAgent is true. */
@@ -115,6 +121,7 @@ export async function planTask(
       singleAgentType: "coder",
       tasks: [
         {
+          id: "task-1",
           description: "Implement task",
           prompt: userPrompt,
           agentName: "coder",

@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en" class="dark scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vibecode Architecture (V1 - Current)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              brand: "#3b82f6",
+              dark: "#0f172a",
+              card: "#1e293b",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        background-color: #0f172a;
+        color: #e2e8f0;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+      .mermaid {
+        background: #1e293b;
+        padding: 2rem;
+        border-radius: 1rem;
+        border: 1px solid #334155;
+        overflow-x: auto;
+      }
+      aside::-webkit-scrollbar {
+        width: 6px;
+      }
+      aside::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      aside::-webkit-scrollbar-thumb {
+        background-color: #334155;
+        border-radius: 10px;
+      }
+      .nav-active {
+        background-color: rgba(59, 130, 246, 0.1);
+        color: #60a5fa !important;
+        border-left: 3px solid #3b82f6;
+      }
+    </style>
+  </head>
+  <body class="flex flex-col md:flex-row min-h-screen">
+    <!-- Sidebar Navigation -->
+    <aside
+      class="w-full md:w-72 bg-[#0b1120] border-r border-slate-800 sticky top-0 h-screen overflow-y-auto flex flex-col shrink-0"
+    >
+      <div class="p-6">
+        <h1 class="text-2xl font-bold text-white mb-2 flex items-center gap-2">
+          <span>🌊</span> Vibecode V1
+        </h1>
+        <p class="text-sm text-brand mb-8 font-medium">Current Architecture</p>
+
+        <nav class="space-y-1 flex-1 text-sm font-medium" id="toc">
+          <a
+            href="#overview"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >Overview Diagram</a
+          >
+
+          <h3
+            class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-3 px-4"
+          >
+            Core Applications
+          </h3>
+          <a
+            href="#web"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >💻 apps/web</a
+          >
+          <a
+            href="#server"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >⚙️ apps/server</a
+          >
+          <a
+            href="#worker"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >🧠 apps/worker</a
+          >
+          <a
+            href="#db"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >💾 packages/db</a
+          >
+
+          <h3
+            class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-3 px-4"
+          >
+            Deep Mechanics
+          </h3>
+          <a
+            href="#pubsub-flow"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >📨 Pub/Sub Flow</a
+          >
+          <a
+            href="#sandbox-rules"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >🛡️ Sandbox Rules</a
+          >
+          <a
+            href="#poller-fallback"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >🔄 Local Dev (Poller)</a
+          >
+          <a
+            href="#git-worktree"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >🌿 Git Worktree</a
+          >
+
+          <div class="mt-8 px-4 pt-6 border-t border-slate-800">
+            <a
+              href="v2.html"
+              class="flex items-center gap-2 text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              <span>Next: V2 Architecture</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-arrow-right"
+              >
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+            </a>
+          </div>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 p-8 md:p-12 lg:p-16 overflow-y-auto">
+      <div class="max-w-4xl mx-auto space-y-24">
+        <header>
+          <div
+            class="inline-block px-3 py-1 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-sm font-semibold mb-4"
+          >
+            V1: Current State
+          </div>
+          <h1 class="text-5xl font-extrabold text-white mb-6">
+            Current Architecture
+          </h1>
+          <p class="text-xl text-slate-400 leading-relaxed">
+            This document outlines the
+            <strong>current implementation</strong> of Vibecode. It details how
+            the web client, API server, and long-running worker orchestrate code
+            generation using strict Git Worktree isolation and Pub/Sub queuing.
+          </p>
+        </header>
+
+        <section id="overview" class="scroll-mt-12">
+          <h2
+            class="text-3xl font-bold text-white mb-6 border-b border-slate-800 pb-4"
+          >
+            High-Level System Flow (V1)
+          </h2>
+          <pre class="mermaid mb-8">
+graph TD
+    classDef ui fill:#0ea5e9,stroke:#0369a1,color:white,stroke-width:2px;
+    classDef server fill:#8b5cf6,stroke:#5b21b6,color:white,stroke-width:2px;
+    classDef worker fill:#f59e0b,stroke:#b45309,color:white,stroke-width:2px;
+    classDef db fill:#10b981,stroke:#047857,color:white,stroke-width:2px;
+    classDef pubsub fill:#ec4899,stroke:#be185d,color:white,stroke-width:2px;
+    
+    User([Developer / User])
+    UI["💻 apps/web (React)"]:::ui
+    API["⚙️ apps/server (Hono Gateway)"]:::server
+    Queue{"📨 Pub/Sub Queue"}:::pubsub
+    Worker["🧠 apps/worker (LangGraph)"]:::worker
+    DB[("💾 packages/db (Postgres)")]:::db
+    Sandbox[("⚡ Local Sandbox Exec")]:::worker
+    
+    User -->|"Types Prompt"| UI
+    UI -->|"REST / SSE"| API
+    API -->|"1. Creates Execution"| DB
+    API -->|"2. Publishes Job"| Queue
+    Queue -->|"3. Pulls Job"| Worker
+    Worker -->|"4. Reads Context"| DB
+    Worker -->|"5. Iterative Code Gen"| Sandbox
+    Sandbox -->|"6. Writes Artifacts"| DB
+    DB -.->|"7. Streams SSE updates"| API
+    API -.->|"8. Real-time updates"| UI
+          </pre>
+        </section>
+
+        <!-- Apps -->
+        <section id="web" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">💻</span>
+            <h2 class="text-3xl font-bold text-white">apps/web</h2>
+          </div>
+          <p class="text-slate-300 mb-6 leading-relaxed">
+            <strong>Stack:</strong> React 19, Vite, Tailwind v4, Zustand. Uses
+            `@assistant-ui/react` and `@streamdown` for rich, live-streaming
+            markdown and IDE-like code blocks. React Query handles API state.
+          </p>
+        </section>
+
+        <section id="server" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">⚙️</span>
+            <h2 class="text-3xl font-bold text-white">apps/server</h2>
+          </div>
+          <p class="text-slate-300 mb-6 leading-relaxed">
+            <strong>Stack:</strong> Hono, Bun. Acts as the API gateway. It
+            manages REST endpoints, handles Better-Auth, and importantly, tails
+            the Postgres DB using a cursor to push Server-Sent Events (SSE) live
+            to the frontend so users can watch the AI agent think.
+          </p>
+        </section>
+
+        <section id="worker" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">🧠</span>
+            <h2 class="text-3xl font-bold text-white">apps/worker</h2>
+          </div>
+          <p class="text-slate-300 mb-6 leading-relaxed">
+            <strong>Stack:</strong> LangChain, LangGraph, DeepAgents. The core
+            engine running autonomously. It pulls jobs from Pub/Sub,
+            orchestrates tasks, and executes real terminal commands using Node
+            Child Processes.
+          </p>
+          <pre class="mermaid mb-8">
+sequenceDiagram
+    participant P as Queue
+    participant W as Worker
+    participant DA as LangGraph
+    participant S as Sandbox
+
+    P->>W: Pull Job
+    W->>DA: runTask()
+    loop AI Reasoning
+        DA->>S: Execute Shell (npm test)
+        S-->>DA: stdout/stderr
+    end
+    W->>S: runValidationGate()
+    alt Fails Validation
+        W->>DA: Re-run Graph
+    else Passes
+        W->>P: Ack Job
+    end
+          </pre>
+        </section>
+
+        <section id="db" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">💾</span>
+            <h2 class="text-3xl font-bold text-white">packages/db</h2>
+          </div>
+          <div class="prose prose-invert max-w-none text-slate-300">
+            <p class="mb-6 leading-relaxed">
+              <strong>Stack:</strong> Drizzle ORM, Neon Serverless Postgres.
+            </p>
+            <p class="mb-6 leading-relaxed">
+              The Persistent Relational Memory Layer ensures context is never
+              lost and work is tracked safely. This is the source of truth that
+              differentiates Vibecode from a standard memory-less chat window.
+            </p>
+            <pre class="mermaid mb-8 mt-4">
+erDiagram
+    workspace ||--o{ chat_thread : "owns"
+    chat_thread ||--o{ chat_message : "contains"
+    workspace ||--o{ execution : "runs"
+    execution ||--o{ execution_event : "streams"
+    execution ||--o{ artifact : "generates"
+    workspace ||--o{ workspace_revision : "tracks versions"
+    
+    workspace {
+        string id PK
+        string current_commit_hash
+    }
+    chat_thread {
+        string id PK
+        string title
+    }
+    chat_message {
+        string id PK
+        jsonb content
+    }
+    execution_event {
+        string id PK
+        jsonb data "LLM chunks"
+    }
+    workspace_revision {
+        string commit_hash "git worktree commit"
+        string parent_hash "rollback pointer"
+    }
+            </pre>
+            <ul class="list-disc pl-6 space-y-4 text-slate-300">
+              <li>
+                <strong class="text-white">Conversational Context:</strong>
+                <code class="text-brand">chat_thread</code> &
+                <code class="text-brand">chat_message</code> maintain history
+                across sessions so the AI recalls past architectural decisions.
+              </li>
+              <li>
+                <strong class="text-white">Sandbox Revisions:</strong>
+                <code class="text-brand">workspace_revision</code> tracks
+                isolated sandbox versions. Every execution records a
+                <code>commitHash</code> so the agent can technically roll back
+                or branch off past iterations.
+              </li>
+              <li>
+                <strong class="text-white">Real-Time State Tracking:</strong>
+                <code class="text-brand">executions</code> represent LangGraph
+                tasks. As the agent moves between sub-agents and runs shell
+                tools, it streams JSON logs into
+                <code class="text-brand">execution_events</code> for the server
+                to tail via SSE.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Mechanics -->
+        <section id="pubsub-flow" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">📨</span>
+            <h2 class="text-3xl font-bold text-white">Pub/Sub Message Flow</h2>
+          </div>
+          <div class="prose prose-invert max-w-none text-slate-300">
+            <p class="mb-4">
+              When the Server receives a prompt, it writes it to Postgres and
+              uses <code>@google-cloud/pubsub</code> to publish a tiny JSON
+              payload containing only the IDs.
+              <strong>The actual prompt text is not sent in the payload</strong
+              >, ensuring it stays well within queue message limits.
+            </p>
+            <div
+              class="bg-slate-900 border border-slate-700 rounded-lg p-6 mb-6"
+            >
+              <pre
+                class="text-sm text-brand bg-transparent p-0 m-0 overflow-visible"
+              >
+{
+  "executionId": "exec_abc123",
+  "workspaceId": "ws_xyz789",
+  "userId": "usr_dev01",
+  "queuedAt": "2026-03-26T00:01:21.000Z"
+}</pre
+              >
+            </div>
+            <p class="mb-6 leading-relaxed">
+              The worker constantly listens to the subscription. Once it claims
+              the <code>executionId</code> from the DB, it calls
+              <code>message.ack()</code> to remove it from the queue. Flow
+              control is set to <code>maxMessages: 4</code>, meaning a single
+              worker VM will only ever run 4 LangGraph jobs simultaneously to
+              avoid memory crashes.
+            </p>
+          </div>
+        </section>
+
+        <section id="sandbox-rules" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">🛡️</span>
+            <h2 class="text-3xl font-bold text-white">Sandbox Rules & Linux</h2>
+          </div>
+          <div class="prose prose-invert max-w-none text-slate-300">
+            <p class="mb-6 leading-relaxed">
+              Running AI-generated shell commands on a VM is dangerous. Vibecode
+              enforces strict rules using the <code>deepagents</code> plugin's
+              <strong>LocalShellBackend</strong>:
+            </p>
+            <ul class="list-disc pl-6 space-y-3 text-slate-300">
+              <li>
+                <strong class="text-white">Strict Directory Jailing:</strong>
+                The AI's <code>cwd</code> is completely locked to the Git
+                Worktree (<code>/tmp/vibecode-xyz/</code>).
+              </li>
+              <li>
+                <strong class="text-white">Process Timeouts:</strong> If the AI
+                runs a command that hangs indefinitely (like starting a web
+                server or infinite loop), the LocalShellBackend kills the
+                process after <strong>120 seconds</strong> and returns a timeout
+                error to the AI.
+              </li>
+              <li>
+                <strong class="text-white">Output Flooding Limits:</strong>
+                stdout/stderr buffers are truncated at exactly
+                <strong>100,000 bytes</strong> to stop memory flooding.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section id="poller-fallback" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">🔄</span>
+            <h2 class="text-3xl font-bold text-white">
+              Local Development (Poller)
+            </h2>
+          </div>
+          <div class="prose prose-invert max-w-none text-slate-300">
+            <p class="mb-6 leading-relaxed">
+              Google Cloud Pub/Sub is fantastic for production, but terrible for
+              local development. Vibecode includes a seamless
+              <strong>Poller Fallback</strong>. If
+              <code>WORKER_DISPATCH_MODE</code> is not "pubsub", the worker
+              gracefully degrades into an infinite <code>setInterval</code> loop
+              that queries Postgres for stuck jobs every few seconds. This makes
+              the repo entirely plug-and-play for local contributors.
+            </p>
+          </div>
+        </section>
+
+        <section id="git-worktree" class="scroll-mt-12 pb-32">
+          <h2
+            class="text-2xl font-bold text-white mb-4 border-b border-slate-800 pb-2"
+          >
+            Git Worktree Architecture
+          </h2>
+          <div class="prose prose-invert max-w-none text-slate-300">
+            <p class="mb-4">
+              To prevent AI agents from breaking the main codebase while they
+              "think" and test code, Vibecode relies heavily on
+              <strong>Git Worktrees</strong>. A worktree allows multiple working
+              directories to be attached to a <em>single</em> Git repository.
+              They share the same <code>.git</code> folder, meaning the AI gets
+              an instantly cloned folder on the disk with zero overhead.
+            </p>
+
+            <pre class="mermaid mb-8 mt-4">
+graph TD
+    classDef repo fill:#1e293b,stroke:#3b82f6,color:white,stroke-width:2px;
+    classDef worktree fill:#0f172a,stroke:#10b981,color:white,stroke-width:2px,stroke-dasharray: 5 5;
+
+    Repo[("Central .git Data\n(Commits, Branches)")]:::repo
+    
+    Repo -->|Default| Main["/your/project/dir\n(Branch: main)"]:::worktree
+    Repo -->|git worktree add| WT1["/tmp/workspace_xyz\n(Branch: ai/execution-123)"]:::worktree
+    Repo -->|git worktree add| WT2["/tmp/workspace_abc\n(Branch: ai/execution-456)"]:::worktree
+            </pre>
+
+            <h3 class="text-xl font-semibold text-white mb-2 mt-6">
+              Execution Isolation Flow:
+            </h3>
+            <ol class="list-decimal pl-5 space-y-2 mb-6">
+              <li>
+                <strong>Setup:</strong> Before the AI starts, the worker creates
+                a physical isolation zone:
+                <code
+                  >git worktree add /tmp/workspace_xyz -b ai/execution-123</code
+                >.
+              </li>
+              <li>
+                <strong>Jailed Execution:</strong> The LangGraph agent runs
+                shell commands (<code>npm test</code>, <code>tsc</code>)
+                strictly inside <code>/tmp/workspace_xyz</code>. Your open IDE
+                window is entirely unaffected by hallucinated syntax errors or
+                infinite loops.
+              </li>
+              <li>
+                <strong>Checkpointing:</strong> Once successful, the agent
+                commits the work. The resulting <code>commitHash</code> is
+                securely saved into the Postgres
+                <code>workspace_revision</code> table alongside the execution
+                ID.
+              </li>
+              <li>
+                <strong>Cleanup:</strong> The worktree is forcibly removed
+                (<code>git worktree remove --force</code>) when the job is done
+                to reclaim disk space instantly.
+              </li>
+            </ol>
+
+            <h3 class="text-xl font-semibold text-white mb-2 mt-6">
+              Two-Phase Safe Rollbacks:
+            </h3>
+            <p class="mb-4">
+              If the validation gate fails, or the user clicks "Undo" in the UI,
+              Vibecode doesn't use a messy <code>git reset --hard</code>.
+              Instead, it uses strict, low-level Git plumbing commands for a
+              faster and safer <strong>Two-Phase Rollback</strong>:
+            </p>
+            <div
+              class="bg-slate-900 border border-slate-700 rounded-lg p-4 mb-4"
+            >
+              <pre
+                class="text-sm text-brand bg-transparent p-0 m-0 overflow-visible"
+              >
+git read-tree &lt;parentHash&gt;
+git checkout-index -a -f
+git clean -fd</pre
+              >
+            </div>
+            <p>
+              <strong>Phase 1:</strong> Attempt the physical Git state
+              restoration first.<br />
+              <strong>Phase 2:</strong> <em>Only</em> if Git succeeds, update
+              the database (marking executions as reverted). If Git fails, the
+              DB transaction aborts to prevent the UI from ever falling out of
+              sync with the physical disk.
+            </p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "dark",
+        fontFamily: "system-ui",
+        securityLevel: "loose",
+      });
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const sections = document.querySelectorAll("section[id]");
+        const navLinks = document.querySelectorAll(".nav-link");
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                navLinks.forEach((link) => {
+                  link.classList.remove("nav-active");
+                  link.style.borderLeftColor = "transparent";
+                });
+                const activeLink = document.querySelector(
+                  `.nav-link[href="#${entry.target.id}"]`,
+                );
+                if (activeLink) activeLink.classList.add("nav-active");
+              }
+            });
+          },
+          { rootMargin: "-20% 0px -60% 0px" },
+        );
+
+        sections.forEach((section) => observer.observe(section));
+      });
+    </script>
+  </body>
+</html>

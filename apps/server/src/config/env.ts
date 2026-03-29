@@ -31,6 +31,9 @@ export const env = createEnv({
     GCS_PUBLIC_URL: z.string().url().optional(),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
+    UPSTASH_VECTOR_REST_URL: z.string().url().optional(),
+    UPSTASH_VECTOR_REST_TOKEN: z.string().min(1).optional(),
+    GITHUB_TOKEN: z.string().min(1).optional(),
 
     EXECUTION_DISPATCH_MODE: z
       .enum(["local_polling", "pubsub"])
@@ -38,6 +41,8 @@ export const env = createEnv({
     PUBSUB_PROJECT_ID: z.string().optional(),
     PUBSUB_EXECUTIONS_TOPIC: z.string().optional(),
     EXECUTION_STREAM_POLL_MS: z.coerce.number().default(250),
+    GCP_REGION: z.string().default("asia-south1"),
+    GCP_COMPUTE_ZONE: z.string().default("asia-south1-a"),
     WORKSPACE_DIR: z.string().default("/tmp/vibecode-workspaces"),
   },
 

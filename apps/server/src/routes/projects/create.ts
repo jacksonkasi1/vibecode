@@ -7,6 +7,9 @@ import { project } from "@repo/db";
 import { newId } from "@repo/db";
 import { logger } from "@repo/logs";
 
+// ** import intelligence
+import { scanProjectKnowledge } from "@/intelligence";
+
 // ** import types
 import type { AppEnv } from "@/types";
 
@@ -37,6 +40,17 @@ route.post("/", async (c) => {
         status: "active",
       })
       .returning();
+
+    if (created.repositoryUrl) {
+      void scanProjectKnowledge({
+        projectId: created.id,
+        userId: user.id,
+      }).catch((scanError) => {
+        logger.warn(
+          `Project created but knowledge scan failed: ${scanError instanceof Error ? scanError.message : String(scanError)}`,
+        );
+      });
+    }
 
     return c.json({ data: created }, 201);
   } catch (error) {

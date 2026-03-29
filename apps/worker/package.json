@@ -21,6 +21,7 @@
     "@repo/logs": "workspace:*",
     "@repo/shared": "workspace:*",
     "@t3-oss/env-core": "^0.10.1",
+    "better-sqlite3": "^12.4.1",
     "deepagents": "^1.8.4",
     "langchain": "^1.2.35",
     "zod": "^3.23.8"

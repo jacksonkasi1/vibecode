@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "execution_event_execution_id_seq_unique_idx" ON "execution_event" USING btree ("execution_id","seq");

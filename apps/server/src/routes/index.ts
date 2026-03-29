@@ -11,6 +11,8 @@ import modelsRouter from "./models";
 import artifactsRouter from "./artifacts";
 import threadsRouter from "./threads";
 import agentsRouter from "./agents";
+import envRouter from "./env";
+import intelligenceRouter from "./intelligence";
 
 const apiRouter = new Hono();
 
@@ -23,5 +25,7 @@ apiRouter.route("/models", modelsRouter);
 apiRouter.route("/artifacts", artifactsRouter);
 apiRouter.route("/threads", threadsRouter);
 apiRouter.route("/agents", agentsRouter);
+apiRouter.route("/env", envRouter);
+apiRouter.route("/intelligence", intelligenceRouter);
 
 export default apiRouter;

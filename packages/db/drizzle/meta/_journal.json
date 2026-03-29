@@ -36,6 +36,20 @@
       "when": 1773905324941,
       "tag": "0004_unknown_earthquake",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774199543759,
+      "tag": "0005_remarkable_morgan_stark",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774201377601,
+      "tag": "0006_gifted_wildside",
+      "breakpoints": true
     }
   ]
 }
