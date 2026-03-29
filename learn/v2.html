@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en" class="dark scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vibecode Architecture (V2 - Intelligence Layer)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              brand: "#8b5cf6",
+              dark: "#0f172a",
+              card: "#1e293b",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        background-color: #0f172a;
+        color: #e2e8f0;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+      .mermaid {
+        background: #1e293b;
+        padding: 2rem;
+        border-radius: 1rem;
+        border: 1px solid #334155;
+        overflow-x: auto;
+      }
+      aside::-webkit-scrollbar {
+        width: 6px;
+      }
+      aside::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      aside::-webkit-scrollbar-thumb {
+        background-color: #334155;
+        border-radius: 10px;
+      }
+      .nav-active {
+        background-color: rgba(139, 92, 246, 0.1);
+        color: #c4b5fd !important;
+        border-left: 3px solid #8b5cf6;
+      }
+    </style>
+  </head>
+  <body class="flex flex-col md:flex-row min-h-screen">
+    <!-- Sidebar Navigation -->
+    <aside
+      class="w-full md:w-72 bg-[#0b1120] border-r border-slate-800 sticky top-0 h-screen overflow-y-auto flex flex-col shrink-0"
+    >
+      <div class="p-6">
+        <a
+          href="index.html"
+          class="text-sm text-slate-400 hover:text-white flex items-center gap-1 mb-6 transition-colors"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-arrow-left"
+          >
+            <path d="m12 19-7-7 7-7" />
+            <path d="M19 12H5" />
+          </svg>
+          Back to V1 Architecture
+        </a>
+        <h1 class="text-2xl font-bold text-white mb-2 flex items-center gap-2">
+          <span>🧠</span> Vibecode V2
+        </h1>
+        <p class="text-sm text-purple-400 mb-8 font-medium">
+          The Intelligence Layer
+        </p>
+
+        <nav class="space-y-1 flex-1 text-sm font-medium" id="toc">
+          <a
+            href="#overview"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >Overview Diagram</a
+          >
+
+          <h3
+            class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-3 px-4"
+          >
+            High-Level Concepts
+          </h3>
+          <a
+            href="#brain"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >🔮 The Central Brain</a
+          >
+          <a
+            href="#memory"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >📚 3-Layer Memory System</a
+          >
+          <a
+            href="#vms"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >🔥 Disposable VMs</a
+          >
+          <a
+            href="#mcp-skills"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >🔌 MCP, Skills & Agents</a
+          >
+
+          <h3
+            class="text-xs font-semibold text-purple-400 uppercase tracking-wider mt-8 mb-3 px-4 border-t border-slate-800 pt-6"
+          >
+            Deep Dives
+          </h3>
+          <a
+            href="#classifier-deep"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >🧭 Intent Classifier</a
+          >
+          <a
+            href="#hydration-deep"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >💧 Context Hydration</a
+          >
+          <a
+            href="#langgraph-deep"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >🤖 LangGraph Orchestrator</a
+          >
+          <a
+            href="#worktree-deep"
+            class="nav-link block px-4 py-2.5 rounded-r-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors mb-8"
+            >🌿 Worktree Sandboxing</a
+          >
+
+          <h3
+            class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-4 mb-3 px-4 border-t border-slate-800 pt-6"
+          >
+            External Docs
+          </h3>
+          <a
+            href="https://langchain-ai.github.io/langgraphjs/"
+            target="_blank"
+            class="block px-4 py-2.5 text-slate-400 hover:text-white transition-colors flex items-center justify-between"
+          >
+            <span>LangGraph JS</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-external-link"
+            >
+              <path d="M15 3h6v6" />
+              <path d="M10 14 21 3" />
+              <path
+                d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+              />
+            </svg>
+          </a>
+          <a
+            href="https://modelcontextprotocol.io/"
+            target="_blank"
+            class="block px-4 py-2.5 text-slate-400 hover:text-white transition-colors flex items-center justify-between mb-8"
+          >
+            <span>Model Context Protocol</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-external-link"
+            >
+              <path d="M15 3h6v6" />
+              <path d="M10 14 21 3" />
+              <path
+                d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+              />
+            </svg>
+          </a>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 p-8 md:p-12 lg:p-16 overflow-y-auto">
+      <div class="max-w-4xl mx-auto space-y-24">
+        <header>
+          <div
+            class="inline-block px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-sm font-semibold mb-4"
+          >
+            V2: Intelligence Layer Roadmap
+          </div>
+          <h1 class="text-5xl font-extrabold text-white mb-6">
+            The Intelligence Layer
+          </h1>
+          <p class="text-xl text-slate-400 leading-relaxed">
+            Vibecode is transitioning from a basic, single-agent execution
+            engine to a <strong>persistent AI dev team orchestrator</strong>. In
+            V2, users talk to a "Central Brain" backed by semantic vector
+            memory, disposable ephemeral workers, and a global Model Context
+            Protocol (MCP) and Skills system. This entirely replaces the heavy,
+            persistent V1 worker polling model.
+          </p>
+        </header>
+
+        <!-- Overview -->
+        <section id="overview" class="scroll-mt-12">
+          <h2
+            class="text-3xl font-bold text-white mb-6 border-b border-slate-800 pb-4"
+          >
+            High-Level System Flow (V2)
+          </h2>
+          <pre class="mermaid mb-8">
+graph TD
+    classDef ui fill:#0ea5e9,stroke:#0369a1,color:white,stroke-width:2px;
+    classDef brain fill:#8b5cf6,stroke:#5b21b6,color:white,stroke-width:2px;
+    classDef vector fill:#10b981,stroke:#047857,color:white,stroke-width:2px;
+    classDef worker fill:#f59e0b,stroke:#b45309,color:white,stroke-width:2px;
+    
+    User([Developer]) --> UI["💻 Web UI"]:::ui
+    UI --> Brain["🧠 The Central Brain (Gateway)"]:::brain
+    Brain --> Classifier{"Intent Classifier"}
+    
+    Classifier -->|Status/Knowledge Query| VectorDB[("📊 Upstash Vector + Postgres\n(Instant Response)")]:::vector
+    Classifier -->|Complex Code Mutation| Dispatcher["⚙️ Job Dispatcher"]
+    
+    Dispatcher -->|Long Task| VM["🖥️ Disposable VM (Worker)"]:::worker
+    Dispatcher -->|Quick Task| CR["⚡ Cloud Run Job"]:::worker
+    
+    VM --> Sandbox[("🌿 Git Worktree Sandbox")]
+    CR --> Sandbox
+    Sandbox -.->|Sync Intelligence| VectorDB
+          </pre>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- HIGH LEVEL CONCEPTS                        -->
+        <!-- ========================================== -->
+
+        <section id="brain" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">🔮</span>
+            <h2 class="text-3xl font-bold text-white">
+              The Central Brain & Routing
+            </h2>
+          </div>
+          <p class="text-slate-300 mb-6 leading-relaxed">
+            In V1, every prompt spun up a LangGraph worker over Pub/Sub. In V2,
+            the <strong>Intelligence Classifier</strong> acts as a Central
+            Brain. Before dispatching anything, the Brain intercepts the
+            request. If you ask a question like "Which of my projects uses
+            Stripe?", the Brain resolves it instantly using Vector Search
+            (<code>text-embedding-004</code>) without ever booting an execution
+            VM, saving massive compute and LLM tokens.
+          </p>
+        </section>
+
+        <section id="memory" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">📚</span>
+            <h2 class="text-3xl font-bold text-white">
+              3-Layer Memory Architecture
+            </h2>
+          </div>
+          <p class="text-slate-300 mb-6 leading-relaxed">
+            Vibecode V2 abandons simplistic "chat history windowing" by
+            implementing a sophisticated 3-tier memory system.
+          </p>
+          <pre class="mermaid mb-8">
+erDiagram
+    LAYER_1_SEMANTIC ||--o{ LAYER_2_RELATIONAL : "enriches"
+    LAYER_2_RELATIONAL ||--o{ LAYER_3_LOCAL : "tracks"
+    
+    LAYER_1_SEMANTIC {
+        Upstash_Vector Embeddings
+        Code_Architecture Patterns
+        AI_Decisions Rationale
+    }
+    LAYER_2_RELATIONAL {
+        Neon_Postgres DB
+        Chat_History Threads
+        Workspace_Revisions Git_Hashes
+    }
+    LAYER_3_LOCAL {
+        Git_Worktrees Sandbox
+        File_System Code
+    }
+          </pre>
+        </section>
+
+        <section id="vms" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">🔥</span>
+            <h2 class="text-3xl font-bold text-white">
+              Disposable VMs & Cloud Run
+            </h2>
+          </div>
+          <p class="text-slate-300 mb-6 leading-relaxed">
+            In V1, a long-running Node worker endlessly polled Postgres. In the
+            V2 architecture,
+            <strong>VMs are completely disposable workers</strong>. They spin
+            up, execute a specific task graph in an isolated Git Worktree, sync
+            memory back to Postgres/Vector, and then forcefully self-destruct to
+            prevent disk bloat across 1000s of AI projects.
+          </p>
+
+          <pre class="mermaid mb-8 mt-4">
+stateDiagram-v2
+    [*] --> VM_Boot : Pub/Sub Trigger
+    
+    state VM_Boot {
+        [*] --> HydrateContext
+        HydrateContext --> CloneWorktree
+    }
+    
+    VM_Boot --> ExecutionPhase : Context Ready
+    
+    state ExecutionPhase {
+        [*] --> LangGraphRun
+        LangGraphRun --> ValidateCode
+        ValidateCode --> LangGraphRun : Fails
+        ValidateCode --> [*] : Passes
+    }
+    
+    ExecutionPhase --> CleanupPhase : Task Complete
+    
+    state CleanupPhase {
+        [*] --> SyncDB
+        SyncDB --> SyncVector
+        SyncVector --> KillProcesses
+        KillProcesses --> RemoveWorktree
+        RemoveWorktree --> [*]
+    }
+    
+    CleanupPhase --> [*] : VM Terminates
+          </pre>
+        </section>
+
+        <section id="mcp-skills" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-4xl">🔌</span>
+            <h2 class="text-3xl font-bold text-white">
+              MCP, Skills & Multi-Agent
+            </h2>
+          </div>
+          <p class="text-slate-300 mb-6 leading-relaxed">
+            V2 replaces simple tools with a unified
+            <strong>Capabilities Model</strong>. This shared foundation
+            orchestrates Custom Skills (markdown context), Multi-Agent
+            delegation, and Model Context Protocol (MCP) servers at both a
+            Workspace-Level and a User-Global level.
+          </p>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- DEEP DIVES                                 -->
+        <!-- ========================================== -->
+
+        <header class="mt-32 pt-16 border-t border-slate-800">
+          <div
+            class="inline-block px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-sm font-semibold mb-4"
+          >
+            Advanced Mechanics
+          </div>
+          <h2 class="text-4xl font-extrabold text-white mb-6">
+            Technical Deep Dives
+          </h2>
+          <p class="text-xl text-slate-400 leading-relaxed">
+            Detailed technical breakdowns of the specific subsystems that
+            orchestrate the V2 Intelligence Layer.
+          </p>
+        </header>
+
+        <!-- DEEP DIVE: Classifier -->
+        <section id="classifier-deep" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-3xl">🧭</span>
+            <h2 class="text-2xl font-bold text-white">
+              Deep Dive: Intent Classifier
+            </h2>
+          </div>
+          <div class="prose prose-invert max-w-none text-slate-300">
+            <p class="mb-6 leading-relaxed">
+              To achieve "instant responses" and save massive amounts of
+              compute, the Hono Server routes every incoming prompt through
+              <code>src/intelligence/classifier.ts</code> before it ever touches
+              a worker VM.
+            </p>
+
+            <pre class="mermaid mb-8 mt-4">
+flowchart TD
+    classDef hnode fill:#0f172a,stroke:#8b5cf6,color:white,stroke-width:2px;
+    classDef router fill:#8b5cf6,stroke:#5b21b6,color:white,stroke-width:2px;
+    classDef instant fill:#10b981,stroke:#047857,color:white,stroke-width:2px;
+    classDef execute fill:#f59e0b,stroke:#b45309,color:white,stroke-width:2px;
+    
+    Prompt["User Prompt"]:::hnode --> Server{"Hono Server"}:::router
+    Server --> Classifier{"Classifier.ts"}:::router
+    
+    Classifier -->|status_query| P["Postgres DB (Events)"]:::hnode
+    P --> UI1["Instant UI Response"]:::instant
+    
+    Classifier -->|cross_project_search| V["Upstash Vector DB"]:::hnode
+    V --> UI2["Instant UI Response"]:::instant
+    
+    Classifier -->|code_mutation| PS["Pub/Sub Queue"]:::hnode
+    PS --> VM["Boot Disposable VM"]:::execute
+            </pre>
+
+            <h3 class="text-xl font-semibold text-white mb-4 mt-8">
+              The Classification Logic:
+            </h3>
+            <p class="mb-4">
+              The classifier analyzes the prompt text and categorizes it into
+              three primary buckets, attaching confidence scores and required
+              context systems:
+            </p>
+
+            <div
+              class="bg-slate-900 border border-slate-700 rounded-lg p-6 mb-6"
+            >
+              <pre
+                class="text-sm text-purple-300 bg-transparent p-0 m-0 overflow-visible"
+              >
+export interface ClassificationResult {
+  intent: "status_query" | "knowledge_query" | "cross_project_search" | "code_mutation";
+  projectId?: string;
+  confidence: number;
+  requiresExecution: boolean; <span class="text-slate-500">// If true, spins up a VM</span>
+  requiresContext: Array<"postgres" | "vector" | "github_api">;
+}</pre>
+            </div>
+
+            <ul class="list-disc pl-6 space-y-4 text-slate-300">
+              <li>
+                <strong class="text-white text-emerald-400"
+                  >status_query:</strong
+                >
+                If the user asks <em>"What's the status of my PR?"</em>, the
+                classifier flags it, sets <code>requiresExecution: false</code>,
+                pulls recent Postgres events, and answers instantly in the UI.
+                No VM boots.
+              </li>
+              <li>
+                <strong class="text-white text-emerald-400"
+                  >cross_project_search:</strong
+                >
+                If the user asks
+                <em>"Which of my projects uses Drizzle ORM?"</em>, the
+                classifier flags it, hits the Upstash Vector DB containing the
+                architectural embeddings of all 1000+ user projects, and
+                responds immediately.
+              </li>
+              <li>
+                <strong class="text-white text-emerald-400"
+                  >code_mutation:</strong
+                >
+                If the user says <em>"Add dark mode"</em>, the classifier sets
+                <code>requiresExecution: true</code>. Only then does the API
+                gateway publish a payload to Pub/Sub to wake up an ephemeral VM.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- DEEP DIVE: Hydration -->
+        <section id="hydration-deep" class="scroll-mt-12">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-3xl">💧</span>
+            <h2 class="text-2xl font-bold text-white">
+              Deep Dive: Context Hydration
+            </h2>
+          </div>
+          <div class="prose prose-invert max-w-none text-slate-300">
+            <p class="mb-6 leading-relaxed">
+              When a VM boots up to process a <code>code_mutation</code>, it
+              wakes up completely amnesiac. Before the LangGraph state machine
+              takes its first step, it runs the
+              <strong>Context Hydrator</strong> (<code
+                >buildMainSystemPrompt</code
+              >
+              inside <code>deepagents-runtime.ts</code>).
+            </p>
+
+            <pre class="mermaid mb-8 mt-4">
+graph LR
+    classDef db fill:#1e293b,stroke:#3b82f6,color:white;
+    classDef prompt fill:#8b5cf6,stroke:#5b21b6,color:white;
+    
+    IDE["💻 Active Editor\n(Visible lines, active file)"] --> Hydrator
+    Postgres[("💾 Relational DB\n(Chat history, states)")]:::db --> Hydrator
+    Vector[("📊 Vector DB\n(Past errors, architecture)")]:::db --> Hydrator
+    Config["📁 Capabilities\n(AGENTS.md, skills/)"] --> Hydrator
+    
+    Hydrator["💧 Context Hydrator"] --> SystemPrompt["📜 Final System Prompt"]:::prompt
+    SystemPrompt --> LangGraph
+            </pre>
+
+            <h3 class="text-xl font-semibold text-white mb-4 mt-8">
+              Dynamic Injection:
+            </h3>
+            <p class="mb-4">
+              Instead of dumping the entire repository into the prompt, the
+              Hydrator surgically injects only what matters:
+            </p>
+            <ul class="list-disc pl-6 space-y-4 text-slate-300">
+              <li>
+                <strong class="text-white">Editor State:</strong> The frontend
+                continuously syncs the user's IDE state. The Hydrator
+                specifically injects:
+                <em
+                  >"Hidden context: The user is currently looking at lines 40-80
+                  of src/components/Button.tsx."</em
+                >
+                This allows the AI to understand phrases like
+                <em>"fix this file"</em>.
+              </li>
+              <li>
+                <strong class="text-white">File Discovery:</strong> It runs
+                <code>detectSkillSources()</code> and
+                <code>detectMemorySources()</code> in the worktree, finding
+                global <code>.agents/</code> folders and dynamically appending
+                them to the system ruleset.
+              </li>
+              <li>
+                <strong class="text-white">Vector Recall:</strong> It queries
+                Upstash using the prompt to find
+                <em
+                  >"How we fixed a similar bug in this project 3 weeks ago"</em
+                >
+                and injects the solution so the AI doesn't repeat past mistakes.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- DEEP DIVE: LangGraph Orchestrator -->
+        <section id="langgraph-deep" class="scroll-mt-12 pb-32">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-3xl">🤖</span>
+            <h2 class="text-2xl font-bold text-white">
+              Deep Dive: LangGraph Orchestrator
+            </h2>
+          </div>
+          <div class="prose prose-invert max-w-none text-slate-300">
+            <p class="mb-6 leading-relaxed">
+              Vibecode V2 abandons the standard "ReAct" single-agent loop. Once
+              the Context Hydrator prepares the prompt, it hands control to a
+              sophisticated <strong>LangGraph State Machine</strong> designed
+              for Multi-Agent delegation and mandatory code validation.
+            </p>
+
+            <h3 class="text-xl font-semibold text-white mb-4 mt-8">
+              The Graph Flow:
+            </h3>
+            <pre class="mermaid mb-8 mt-4">
+graph TD
+    classDef node fill:#1e293b,stroke:#8b5cf6,color:white,stroke-width:2px;
+    classDef tool fill:#0f172a,stroke:#10b981,color:white,stroke-width:2px;
+    classDef error fill:#450a0a,stroke:#ef4444,color:white,stroke-width:2px;
+    
+    Start((Start)) --> Planner["📝 Planner Node"]:::node
+    Planner --> Orchestrator["🤖 Orchestrator Node"]:::node
+    
+    Orchestrator -->|UI Tasks| Frontend["🎨 Frontend Sub-Agent"]:::node
+    Orchestrator -->|API Tasks| Backend["⚙️ Backend Sub-Agent"]:::node
+    Orchestrator -->|DB Tasks| Schema["🗄️ Database Sub-Agent"]:::node
+    
+    Frontend -->|Executes Shell/MCP| Tools["🛠️ Tool Node (LocalShellBackend)"]:::tool
+    Backend -->|Executes Shell/MCP| Tools
+    Schema -->|Executes Shell/MCP| Tools
+    
+    Tools -->|stdout/stderr| Frontend
+    Tools -->|stdout/stderr| Backend
+    Tools -->|stdout/stderr| Schema
+    
+    Frontend --> Review["🔎 Review Node"]:::node
+    Backend --> Review
+    Schema --> Review
+    
+    Review -->|Tasks Remaining| Orchestrator
+    Review -->|Code Looks Good| Validator["✅ Validation Gate\n(Runs tsc & build)"]:::tool
+    
+    Validator -->|Fails Syntax| Fixer["🚨 Error Fixer Node"]:::error
+    Fixer --> Orchestrator
+    
+    Validator -->|Passes| End((End))
+            </pre>
+
+            <h3 class="text-xl font-semibold text-white mb-4 mt-8">
+              Key Orchestration Mechanics:
+            </h3>
+            <ul class="list-disc pl-6 space-y-4 text-slate-300">
+              <li>
+                <strong class="text-white">Sub-Agent Bounding:</strong> The
+                Orchestrator does not write code. It acts as a tech lead. If the
+                plan requires a database change and a UI change, it delegates to
+                the <code>Database Sub-Agent</code> (injecting only Drizzle ORM
+                skills) and the <code>Frontend Sub-Agent</code> (injecting only
+                React/Tailwind skills). This keeps LLM context windows small and
+                highly focused, preventing hallucination.
+              </li>
+              <li>
+                <strong class="text-white"
+                  >Sandbox Interfacing (LocalShellBackend):</strong
+                >
+                When a Sub-Agent needs to write a file or run a test, it hits
+                the <code>Tool Node</code>. This node strictly executes the
+                command inside the Git Worktree sandbox (with a 120s timeout and
+                100KB output limit), piping the real terminal output back into
+                the sub-agent's state array.
+              </li>
+              <li>
+                <strong class="text-white">The Validation Gate Loop:</strong>
+                The graph <strong>cannot reach the End state</strong> until it
+                passes the Validation Gate (<code>runValidationGate</code>). The
+                gate parses the user's <code>package.json</code>, looks for
+                <code>check-types</code> or <code>build</code> scripts, and
+                executes them. If they fail, the graph routes to an
+                <code>Error Fixer Node</code>, appending the exact compiler
+                errors to the state, forcing the AI to fix its own typos before
+                returning to the user.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- DEEP DIVE: Git Worktree Sandboxing -->
+        <section id="worktree-deep" class="scroll-mt-12 pb-32">
+          <div
+            class="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4"
+          >
+            <span class="text-3xl">🌿</span>
+            <h2 class="text-2xl font-bold text-white">
+              Deep Dive: Git Worktree Sandboxing
+            </h2>
+          </div>
+          <div class="prose prose-invert max-w-none text-slate-300">
+            <p class="mb-6 leading-relaxed">
+              When a disposable VM boots up, it doesn't just clone the user's
+              repository normally. Doing so for 1,000s of projects would be slow
+              and bloated. Instead, the Worker relies on
+              <strong>Git Worktrees</strong> to instantly attach a sandboxed
+              folder (<code>/tmp/workspace_xyz</code>) directly to the central
+              bare Git data.
+            </p>
+
+            <h3 class="text-xl font-semibold text-white mb-4 mt-8">
+              Granular Checkpointing & Orphaned Commits:
+            </h3>
+            <p class="mb-4">
+              Vibecode V2 decouples its "AI Memory" from the user's actual Git
+              branch. It doesn't clutter the <code>main</code> branch with
+              terrible <em>"AI attempted fix"</em> commits.
+            </p>
+
+            <pre class="mermaid mb-8 mt-4">
+gitGraph
+    commit id: "Initial Commit"
+    commit id: "User: setup layout"
+    commit id: "User: add button"
+    branch refs/checkpoints/exec_123
+    checkout refs/checkpoints/exec_123
+    commit id: "AI: plan UI"
+    commit id: "AI: install npm package"
+    commit id: "AI: write component"
+    checkout main
+    commit id: "User: PR merge"
+            </pre>
+
+            <ul class="list-disc pl-6 space-y-4 text-slate-300">
+              <li>
+                <strong class="text-white text-emerald-400"
+                  >Custom Refs:</strong
+                >
+                Every single step the AI takes generates an orphaned commit
+                (using low-level <code>git write-tree</code>). These are stored
+                invisibly under
+                <code>refs/checkpoints/&lt;execution_id&gt;</code>.
+              </li>
+              <li>
+                <strong class="text-white text-emerald-400"
+                  >Perfect Snapshots:</strong
+                >
+                This captures the exact state of the index and the physical
+                files. The commit SHAs are logged to the
+                <code>workspace_revision</code> Postgres table.
+              </li>
+            </ul>
+
+            <h3 class="text-xl font-semibold text-white mb-4 mt-8">
+              Two-Phase Rollbacks & Restoration:
+            </h3>
+            <p class="mb-4">
+              If an AI Agent hallucinates badly or deletes a critical file, the
+              system must restore state perfectly. It does not use
+              <code>git reset --hard</code> (which is slow and prone to dangling
+              file bugs). It executes a strict
+              <strong>Two-Phase Rollback</strong> via plumbing commands:
+            </p>
+
+            <div
+              class="bg-slate-900 border border-slate-700 rounded-lg p-6 mb-6"
+            >
+              <pre
+                class="text-sm text-emerald-400 bg-transparent p-0 m-0 overflow-visible"
+              >
+<span class="text-slate-500"># 1. Update the index to match the target rollback tree</span>
+git read-tree &lt;worktreeTree_Hash&gt;
+
+<span class="text-slate-500"># 2. Force checkout the index into the physical filesystem</span>
+git checkout-index -a -f
+
+<span class="text-slate-500"># 3. Clean up any untracked garbage files left behind</span>
+git clean -fd</pre>
+            </div>
+
+            <p class="mb-6 leading-relaxed">
+              <strong>Phase 1:</strong> Attempt the physical Git state
+              restoration first.<br />
+              <strong>Phase 2:</strong> <em>Only</em> if Git succeeds, update
+              the database (marking executions as reverted). If Git fails, abort
+              the DB transaction to prevent UI desync.
+            </p>
+
+            <h3 class="text-xl font-semibold text-white mb-4 mt-8">
+              Aggressive Physical Cleanup:
+            </h3>
+            <p class="mb-4">
+              When the Disposable VM finishes the job, it doesn't just shut
+              down. It actively protects the cloud disk by running:
+            </p>
+            <ul class="list-disc pl-6 space-y-4 text-slate-300">
+              <li>
+                <strong>Worktree Teardown:</strong>
+                <code>git worktree remove &lt;path&gt; --force</code> instantly
+                deletes the sandbox files.
+              </li>
+              <li>
+                <strong>Process Murder:</strong> Runs a force
+                <code>SIGKILL</code> on any lingering terminal commands started
+                by the AI.
+              </li>
+              <li>
+                <strong>Cache Purging:</strong> Wipes leftover
+                <code>.log</code> artifacts to prevent silent storage leaks over
+                time.
+              </li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Load Mermaid & Setup Intersection Observer -->
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "dark",
+        fontFamily: "system-ui",
+        securityLevel: "loose",
+      });
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const sections = document.querySelectorAll("section[id]");
+        const navLinks = document.querySelectorAll(".nav-link");
+
+        const observerOptions = {
+          root: null,
+          rootMargin: "-20% 0px -60% 0px",
+          threshold: 0,
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              navLinks.forEach((link) => {
+                link.classList.remove("nav-active");
+                link.style.borderLeftColor = "transparent";
+              });
+
+              const id = entry.target.getAttribute("id");
+              const activeLink = document.querySelector(
+                `.nav-link[href="#${id}"]`,
+              );
+              if (activeLink) {
+                activeLink.classList.add("nav-active");
+              }
+            }
+          });
+        }, observerOptions);
+
+        sections.forEach((section) => observer.observe(section));
+      });
+    </script>
+  </body>
+</html>

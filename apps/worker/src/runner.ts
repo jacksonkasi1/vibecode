@@ -8,6 +8,7 @@ import path from "node:path";
 import { db } from "@repo/db";
 import {
   and,
+  appendExecutionEventRecord,
   artifact,
   asc,
   chatMessage,
@@ -28,11 +29,17 @@ import type { ChatMessage } from "@repo/ai";
 
 // ** import config
 import { env } from "@/config/env";
+import {
+  buildTaskGraph,
+  planTask,
+  runValidationGate,
+  saveExecutionContinuation,
+} from "./lib";
 import { withWorkspaceLock } from "./lib/workspace-lock";
 import { runDeepAgentsExecution } from "./lib/deepagents-runtime";
 
 // ** import agents
-import { loadUserAgents, mergeUserAgents } from "@repo/ai";
+import { GeminiProvider, loadUserAgents, mergeUserAgents } from "@repo/ai";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -153,19 +160,8 @@ async function appendExecutionEvent(
   const previous = eventQueues.get(executionId) ?? Promise.resolve(0);
 
   const next = previous.then(async () => {
-    const [last] = await db
-      .select({ seq: executionEvent.seq })
-      .from(executionEvent)
-      .where(eq(executionEvent.executionId, executionId))
-      .orderBy(desc(executionEvent.seq))
-      .limit(1);
-
-    const nextSeq = (last?.seq ?? 0) + 1;
-
-    await db.insert(executionEvent).values({
-      id: newId(),
+    const nextSeq = await appendExecutionEventRecord({
       executionId,
-      seq: nextSeq,
       type,
       payloadJson: payload,
     });
@@ -432,6 +428,75 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
       modelId,
     });
 
+    let generatedPlan:
+      | {
+          title: string;
+          summary: string;
+          estimatedComplexity: "low" | "medium" | "high";
+          requiresApproval: boolean;
+          isSingleAgent: boolean;
+          singleAgentType?: string;
+          tasks: Array<{
+            id: string;
+            description: string;
+            prompt: string;
+            agentName: string;
+            fileOwnership: string[];
+            dependsOn: string[];
+          }>;
+        }
+      | undefined;
+
+    if (env.GEMINI_API_KEY) {
+      try {
+        const planner = new GeminiProvider({ apiKey: env.GEMINI_API_KEY });
+        const plan = await planTask(execRecord.prompt, planner);
+        const graph = buildTaskGraph(plan);
+
+        generatedPlan = {
+          title:
+            plan.title ??
+            (execRecord.prompt.length > 72
+              ? `${execRecord.prompt.slice(0, 72)}...`
+              : execRecord.prompt),
+          summary:
+            plan.summary ??
+            `Execution will run ${plan.isSingleAgent ? "a single agent" : `${plan.tasks.length} coordinated tasks`}.`,
+          estimatedComplexity:
+            plan.estimatedComplexity ??
+            (plan.isSingleAgent
+              ? "low"
+              : plan.tasks.length > 2
+                ? "high"
+                : "medium"),
+          requiresApproval: plan.requiresApproval ?? false,
+          isSingleAgent: plan.isSingleAgent,
+          singleAgentType: plan.singleAgentType ?? undefined,
+          tasks: graph.orderedTasks.map((task) => ({
+            id: task.id,
+            description: task.description,
+            prompt: task.prompt,
+            agentName: task.agentName,
+            fileOwnership: task.fileOwnership,
+            dependsOn: task.dependsOn,
+          })),
+        };
+
+        await appendExecutionEvent(execRecord.id, "plan", generatedPlan);
+        await db
+          .update(execution)
+          .set({
+            taskDescription: generatedPlan.summary,
+            updatedAt: new Date(),
+          })
+          .where(eq(execution.id, execRecord.id));
+      } catch (error) {
+        logger.warn(
+          `[Exec ${execRecord.id}] Failed to generate structured plan: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
     const {
       finalContent,
       finalUsage,
@@ -483,8 +548,21 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
     let mergeStatus: "completed" | "conflicted" | "failed" = "completed";
     let mergedCommitHash = "";
 
+    const validationResult = isCancelled
+      ? { passed: true, executed: [], failures: [] }
+      : await runValidationGate(worktreeDir);
+
+    await appendExecutionEvent(execRecord.id, "validation", validationResult);
+
+    if (!validationResult.passed) {
+      mergeStatus = "failed";
+      mergeError = `Validation failed before merge: ${validationResult.failures
+        .map((failure) => `${failure.name}: ${failure.message}`)
+        .join(" | ")}`;
+    }
+
     // ── Commit & merge worktree ───────────────────────────────────────────
-    if (!isCancelled) {
+    if (!isCancelled && validationResult.passed) {
       try {
         await execAsync(`git add .`, { cwd: worktreeDir });
         const { stdout: diff } = await execAsync(`git diff --staged`, {
@@ -557,6 +635,8 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
       steps: step,
       agentName,
       classification,
+      plan: generatedPlan ?? null,
+      validation: validationResult,
     });
 
     const synthesizedArtifacts = await buildFileArtifacts(
@@ -670,6 +750,30 @@ export async function runExecution(execRecord: typeof execution.$inferSelect) {
         });
       }
     });
+
+    if ((mergeError || isCancelled) && !mergedCommitHash) {
+      await saveExecutionContinuation({
+        executionId: execRecord.id,
+        workspaceId: execRecord.workspaceId,
+        userId: execRecord.userId,
+        title: generatedPlan?.title ?? execRecord.prompt.slice(0, 80),
+        contextSummary: finalText.slice(0, 2000),
+        state: {
+          prompt: execRecord.prompt,
+          plan: generatedPlan ?? null,
+          validation: validationResult,
+          mergeError: mergeError || null,
+          pendingTasks: generatedPlan?.tasks ?? [],
+          completedTasks: [],
+        },
+        lastCommit: mergedCommitHash || null,
+        lastBranch: branchName,
+      }).catch((error) => {
+        logger.warn(
+          `Failed to save execution continuation: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+    }
 
     if (!isCancelled) {
       const finalStatus = mergeError ? mergeStatus : "completed";

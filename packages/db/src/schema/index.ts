@@ -8,3 +8,4 @@ export * from "./models";
 export * from "./chat";
 export * from "./execution-events";
 export * from "./history";
+export * from "./intelligence";

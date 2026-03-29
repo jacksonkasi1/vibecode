@@ -22,6 +22,7 @@
     "@repo/storage": "workspace:*",
     "@t3-oss/env-core": "^0.13.10",
     "hono": "^4.11.4",
+    "octokit": "^5.0.4",
     "zod": "^4.3.5"
   },
   "devDependencies": {

@@ -42,3 +42,9 @@ export {
 } from "./agents/registry";
 
 export { loadUserAgents } from "./agents/loader";
+
+// ** import embeddings
+export * from "./embeddings";
+
+// ** import scanner
+export * from "./scanner";

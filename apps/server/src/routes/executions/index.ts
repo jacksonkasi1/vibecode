@@ -14,6 +14,7 @@ import forceMergeRoute from "./force-merge";
 import streamRoute from "./stream";
 import agentsRoute from "./agents";
 import eventsRoute from "./events";
+import planRoute from "./plan";
 
 // ** import types
 import type { AppEnv } from "@/types";
@@ -33,5 +34,6 @@ executionsRouter.route("/", forceMergeRoute);
 executionsRouter.route("/", streamRoute);
 executionsRouter.route("/", agentsRoute);
 executionsRouter.route("/", eventsRoute);
+executionsRouter.route("/", planRoute);
 
 export default executionsRouter;
